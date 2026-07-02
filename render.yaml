@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: aistars-bot
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python bot.py
+    envVars:
+      - key: BOT_TOKEN
+        value: 8263618011:AAGyH2h7ziuiWmtcV6EE-DS-stwH3L-CfqU
+      - key: CRYPTO_PAY_TOKEN
+        value: 604050:AAUxXlusqiyuAKHvxZHoAp4KAGfjxmzAvBl
+      - key: ADMIN_IDS
+        value: "8440278509"

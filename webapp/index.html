@@ -1,0 +1,1228 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>AI Stars — Нейросеть для Brawl Stars</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Orbitron:wght@500;700;900&display=swap" rel="stylesheet">
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    <style>
+        /* ===== CSS RESET & VARIABLES ===== */
+        *, *::before, *::after {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --bg-primary: #0a0a1a;
+            --bg-secondary: #0f0f2a;
+            --bg-card: rgba(20, 20, 50, 0.6);
+            --bg-card-hover: rgba(30, 30, 70, 0.8);
+            --glass-border: rgba(255, 255, 255, 0.08);
+            --glass-border-hover: rgba(255, 255, 255, 0.15);
+
+            --accent-primary: #7c3aed;
+            --accent-secondary: #a855f7;
+            --accent-tertiary: #c084fc;
+            --accent-glow: rgba(124, 58, 237, 0.4);
+
+            --neon-blue: #3b82f6;
+            --neon-cyan: #06b6d4;
+            --neon-pink: #ec4899;
+            --neon-green: #10b981;
+            --neon-orange: #f97316;
+            --neon-yellow: #eab308;
+
+            --text-primary: #f1f5f9;
+            --text-secondary: #94a3b8;
+            --text-muted: #64748b;
+
+            --gradient-hero: linear-gradient(135deg, #7c3aed 0%, #3b82f6 50%, #06b6d4 100%);
+            --gradient-card-month: linear-gradient(160deg, rgba(59, 130, 246, 0.15), rgba(6, 182, 212, 0.08));
+            --gradient-card-forever: linear-gradient(160deg, rgba(124, 58, 237, 0.2), rgba(236, 72, 153, 0.1));
+            --gradient-btn: linear-gradient(135deg, #7c3aed, #3b82f6);
+            --gradient-btn-hover: linear-gradient(135deg, #6d28d9, #2563eb);
+            --gradient-stars: linear-gradient(135deg, #eab308, #f97316);
+            --gradient-rub: linear-gradient(135deg, #10b981, #06b6d4);
+            --gradient-usd: linear-gradient(135deg, #3b82f6, #7c3aed);
+
+            --radius-sm: 8px;
+            --radius-md: 12px;
+            --radius-lg: 16px;
+            --radius-xl: 20px;
+            --radius-2xl: 24px;
+
+            --shadow-glow: 0 0 30px rgba(124, 58, 237, 0.2);
+            --shadow-card: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            min-height: 100vh;
+            overflow-x: hidden;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* ===== ANIMATED BACKGROUND ===== */
+        .bg-effects {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .bg-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(80px);
+            opacity: 0.3;
+            animation: orbFloat 20s ease-in-out infinite;
+        }
+
+        .bg-orb--1 {
+            width: 300px;
+            height: 300px;
+            background: var(--accent-primary);
+            top: -100px;
+            right: -80px;
+            animation-delay: 0s;
+        }
+
+        .bg-orb--2 {
+            width: 250px;
+            height: 250px;
+            background: var(--neon-blue);
+            bottom: 20%;
+            left: -60px;
+            animation-delay: -7s;
+        }
+
+        .bg-orb--3 {
+            width: 200px;
+            height: 200px;
+            background: var(--neon-cyan);
+            top: 40%;
+            right: -40px;
+            animation-delay: -14s;
+        }
+
+        .bg-orb--4 {
+            width: 180px;
+            height: 180px;
+            background: var(--neon-pink);
+            bottom: -50px;
+            left: 30%;
+            animation-delay: -5s;
+        }
+
+        @keyframes orbFloat {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            25% { transform: translate(30px, -40px) scale(1.1); }
+            50% { transform: translate(-20px, 20px) scale(0.95); }
+            75% { transform: translate(15px, 35px) scale(1.05); }
+        }
+
+        /* ===== PARTICLES ===== */
+        .particles {
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 3px;
+            height: 3px;
+            background: var(--accent-tertiary);
+            border-radius: 50%;
+            opacity: 0;
+            animation: particleRise linear infinite;
+        }
+
+        @keyframes particleRise {
+            0% {
+                opacity: 0;
+                transform: translateY(100vh) scale(0);
+            }
+            10% {
+                opacity: 0.8;
+            }
+            90% {
+                opacity: 0.3;
+            }
+            100% {
+                opacity: 0;
+                transform: translateY(-20px) scale(1);
+            }
+        }
+
+        /* ===== MAIN CONTAINER ===== */
+        .app {
+            position: relative;
+            z-index: 1;
+            max-width: 420px;
+            margin: 0 auto;
+            padding: 16px 16px 100px;
+        }
+
+        /* ===== HERO SECTION ===== */
+        .hero {
+            text-align: center;
+            padding: 32px 16px 24px;
+            position: relative;
+        }
+
+        .hero__badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 50px;
+            background: rgba(124, 58, 237, 0.15);
+            border: 1px solid rgba(124, 58, 237, 0.3);
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--accent-tertiary);
+            margin-bottom: 16px;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            animation: fadeInDown 0.6s ease-out;
+        }
+
+        .hero__badge-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--neon-green);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.8); }
+        }
+
+        .hero__logo {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 42px;
+            font-weight: 900;
+            background: var(--gradient-hero);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            margin-bottom: 4px;
+            line-height: 1.1;
+            animation: fadeInUp 0.6s ease-out;
+            text-shadow: none;
+            filter: drop-shadow(0 0 30px rgba(124, 58, 237, 0.3));
+        }
+
+        .hero__subtitle {
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-weight: 500;
+            margin-bottom: 20px;
+            animation: fadeInUp 0.6s ease-out 0.1s both;
+        }
+
+        .hero__stars {
+            display: flex;
+            justify-content: center;
+            gap: 4px;
+            margin-bottom: 8px;
+            animation: fadeInUp 0.6s ease-out 0.15s both;
+        }
+
+        .hero__star {
+            font-size: 18px;
+            animation: starTwinkle 2s ease-in-out infinite;
+        }
+
+        .hero__star:nth-child(2) { animation-delay: 0.3s; }
+        .hero__star:nth-child(3) { animation-delay: 0.6s; }
+        .hero__star:nth-child(4) { animation-delay: 0.9s; }
+        .hero__star:nth-child(5) { animation-delay: 1.2s; }
+
+        @keyframes starTwinkle {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.6; transform: scale(0.85); }
+        }
+
+        /* ===== FEATURES SECTION ===== */
+        .features {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 28px;
+            animation: fadeInUp 0.6s ease-out 0.2s both;
+        }
+
+        .feature {
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: 16px 12px;
+            text-align: center;
+            backdrop-filter: blur(12px);
+            transition: all 0.3s ease;
+        }
+
+        .feature:hover {
+            background: var(--bg-card-hover);
+            border-color: var(--glass-border-hover);
+            transform: translateY(-2px);
+        }
+
+        .feature__icon {
+            font-size: 28px;
+            margin-bottom: 8px;
+            display: block;
+        }
+
+        .feature__title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-primary);
+            line-height: 1.3;
+        }
+
+        /* ===== CURRENCY TABS ===== */
+        .currency-section {
+            margin-bottom: 20px;
+            animation: fadeInUp 0.6s ease-out 0.3s both;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .currency-tabs {
+            display: flex;
+            gap: 6px;
+            padding: 4px;
+            background: var(--bg-card);
+            border-radius: var(--radius-xl);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(12px);
+        }
+
+        .currency-tab {
+            flex: 1;
+            padding: 10px 8px;
+            border: none;
+            border-radius: var(--radius-lg);
+            background: transparent;
+            color: var(--text-secondary);
+            font-family: 'Inter', sans-serif;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+        }
+
+        .currency-tab:hover {
+            color: var(--text-primary);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .currency-tab--active {
+            color: #fff !important;
+            position: relative;
+        }
+
+        .currency-tab--active[data-currency="stars"] {
+            background: var(--gradient-stars);
+            box-shadow: 0 4px 15px rgba(234, 179, 8, 0.3);
+        }
+
+        .currency-tab--active[data-currency="rub"] {
+            background: var(--gradient-rub);
+            box-shadow: 0 4px 15px rgba(16, 185, 129, 0.3);
+        }
+
+        .currency-tab--active[data-currency="usd"] {
+            background: var(--gradient-usd);
+            box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+        }
+
+        .currency-tab__icon {
+            font-size: 16px;
+        }
+
+        /* ===== PRICING CARDS ===== */
+        .pricing {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+            margin-top: 20px;
+            animation: fadeInUp 0.6s ease-out 0.4s both;
+        }
+
+        .price-card {
+            position: relative;
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-2xl);
+            padding: 24px 20px;
+            backdrop-filter: blur(16px);
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            overflow: hidden;
+            cursor: pointer;
+        }
+
+        .price-card::before {
+            content: '';
+            position: absolute;
+            inset: 0;
+            border-radius: var(--radius-2xl);
+            padding: 1px;
+            background: linear-gradient(160deg, rgba(255,255,255,0.1), transparent 50%);
+            mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+            mask-composite: exclude;
+            -webkit-mask-composite: xor;
+            pointer-events: none;
+        }
+
+        .price-card:hover {
+            transform: translateY(-3px);
+            border-color: var(--glass-border-hover);
+            box-shadow: var(--shadow-card);
+        }
+
+        .price-card--month {
+            background: var(--gradient-card-month);
+        }
+
+        .price-card--month:hover {
+            box-shadow: 0 8px 40px rgba(59, 130, 246, 0.15);
+        }
+
+        .price-card--forever {
+            background: var(--gradient-card-forever);
+            border-color: rgba(124, 58, 237, 0.2);
+        }
+
+        .price-card--forever:hover {
+            border-color: rgba(124, 58, 237, 0.4);
+            box-shadow: 0 8px 40px rgba(124, 58, 237, 0.2);
+        }
+
+        .price-card__popular {
+            position: absolute;
+            top: 14px;
+            right: 14px;
+            padding: 4px 12px;
+            border-radius: 50px;
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            text-transform: uppercase;
+            background: var(--gradient-hero);
+            color: #fff;
+            animation: shimmer 3s linear infinite;
+        }
+
+        @keyframes shimmer {
+            0% { filter: brightness(1); }
+            50% { filter: brightness(1.3); }
+            100% { filter: brightness(1); }
+        }
+
+        .price-card__header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 16px;
+        }
+
+        .price-card__icon-wrap {
+            width: 48px;
+            height: 48px;
+            border-radius: var(--radius-md);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 22px;
+            flex-shrink: 0;
+        }
+
+        .price-card--month .price-card__icon-wrap {
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.2), rgba(6, 182, 212, 0.2));
+        }
+
+        .price-card--forever .price-card__icon-wrap {
+            background: linear-gradient(135deg, rgba(124, 58, 237, 0.2), rgba(236, 72, 153, 0.2));
+        }
+
+        .price-card__title {
+            font-size: 17px;
+            font-weight: 700;
+        }
+
+        .price-card__desc {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+        }
+
+        .price-card__price-row {
+            display: flex;
+            align-items: baseline;
+            gap: 6px;
+            margin-bottom: 18px;
+        }
+
+        .price-card__amount {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 36px;
+            font-weight: 700;
+            line-height: 1;
+        }
+
+        .price-card--month .price-card__amount {
+            background: linear-gradient(135deg, #3b82f6, #06b6d4);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .price-card--forever .price-card__amount {
+            background: linear-gradient(135deg, #a855f7, #ec4899);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .price-card__currency {
+            font-size: 16px;
+            font-weight: 600;
+            color: var(--text-secondary);
+        }
+
+        .price-card__period {
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        /* ===== BUY BUTTON ===== */
+        .buy-btn {
+            width: 100%;
+            padding: 14px 24px;
+            border: none;
+            border-radius: var(--radius-lg);
+            font-family: 'Inter', sans-serif;
+            font-size: 15px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .buy-btn::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            background: linear-gradient(135deg, rgba(255,255,255,0.2) 0%, transparent 50%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .buy-btn:hover::after {
+            opacity: 1;
+        }
+
+        .buy-btn:active {
+            transform: scale(0.97);
+        }
+
+        .buy-btn--month {
+            background: linear-gradient(135deg, #3b82f6, #06b6d4);
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(59, 130, 246, 0.3);
+        }
+
+        .buy-btn--month:hover {
+            box-shadow: 0 6px 30px rgba(59, 130, 246, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .buy-btn--forever {
+            background: linear-gradient(135deg, #7c3aed, #ec4899);
+            color: #fff;
+            box-shadow: 0 4px 20px rgba(124, 58, 237, 0.3);
+        }
+
+        .buy-btn--forever:hover {
+            box-shadow: 0 6px 30px rgba(124, 58, 237, 0.5);
+            transform: translateY(-1px);
+        }
+
+        .buy-btn__icon {
+            font-size: 18px;
+        }
+
+        /* ===== FEATURES LIST ON CARD ===== */
+        .price-card__features {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 18px;
+        }
+
+        .price-card__feature {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 13px;
+            color: var(--text-secondary);
+        }
+
+        .price-card__feature-icon {
+            font-size: 14px;
+            flex-shrink: 0;
+        }
+
+        /* ===== GUARANTEE SECTION ===== */
+        .guarantee {
+            margin-top: 24px;
+            padding: 18px;
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-xl);
+            backdrop-filter: blur(12px);
+            text-align: center;
+            animation: fadeInUp 0.6s ease-out 0.5s both;
+        }
+
+        .guarantee__icon {
+            font-size: 32px;
+            margin-bottom: 8px;
+        }
+
+        .guarantee__title {
+            font-size: 15px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .guarantee__text {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+        }
+
+        /* ===== STATS BAR ===== */
+        .stats {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 28px;
+            animation: fadeInUp 0.6s ease-out 0.25s both;
+        }
+
+        .stat {
+            flex: 1;
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: 14px 8px;
+            text-align: center;
+            backdrop-filter: blur(12px);
+        }
+
+        .stat__value {
+            font-family: 'Orbitron', sans-serif;
+            font-size: 20px;
+            font-weight: 700;
+            background: var(--gradient-hero);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .stat__label {
+            font-size: 10px;
+            color: var(--text-muted);
+            font-weight: 500;
+            margin-top: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        /* ===== FOOTER ===== */
+        .footer {
+            text-align: center;
+            padding: 24px 16px;
+            margin-top: 16px;
+            animation: fadeInUp 0.6s ease-out 0.6s both;
+        }
+
+        .footer__text {
+            font-size: 11px;
+            color: var(--text-muted);
+            line-height: 1.6;
+        }
+
+        .footer__link {
+            color: var(--accent-secondary);
+            text-decoration: none;
+            font-weight: 500;
+        }
+
+        /* ===== SUCCESS OVERLAY ===== */
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(10, 10, 26, 0.9);
+            backdrop-filter: blur(8px);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            visibility: hidden;
+            transition: all 0.3s ease;
+        }
+
+        .overlay--visible {
+            opacity: 1;
+            visibility: visible;
+        }
+
+        .overlay__content {
+            text-align: center;
+            padding: 40px 32px;
+            background: var(--bg-card);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-2xl);
+            backdrop-filter: blur(16px);
+            max-width: 320px;
+            transform: scale(0.9);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .overlay--visible .overlay__content {
+            transform: scale(1);
+        }
+
+        .overlay__icon {
+            font-size: 56px;
+            margin-bottom: 16px;
+            animation: bounceIn 0.5s ease-out;
+        }
+
+        .overlay__title {
+            font-size: 20px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .overlay__text {
+            font-size: 14px;
+            color: var(--text-secondary);
+            line-height: 1.5;
+            margin-bottom: 20px;
+        }
+
+        .overlay__btn {
+            padding: 12px 32px;
+            border: none;
+            border-radius: var(--radius-lg);
+            background: var(--gradient-btn);
+            color: #fff;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .overlay__btn:hover {
+            background: var(--gradient-btn-hover);
+            box-shadow: 0 4px 20px var(--accent-glow);
+        }
+
+        /* ===== ANIMATIONS ===== */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes fadeInDown {
+            from {
+                opacity: 0;
+                transform: translateY(-15px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes bounceIn {
+            0% { transform: scale(0); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
+        /* ===== LOADING SPINNER ===== */
+        .spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* ===== TELEGRAM THEME ADAPTATION ===== */
+        @media (prefers-color-scheme: light) {
+            /* Keep dark theme regardless — it's a gaming app */
+        }
+
+        /* ===== SCROLLBAR ===== */
+        ::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(124, 58, 237, 0.3);
+            border-radius: 4px;
+        }
+
+        /* ===== HAPTIC FEEDBACK PULSE ===== */
+        .price-card--selected {
+            border-color: var(--accent-primary) !important;
+            box-shadow: 0 0 0 2px var(--accent-primary), var(--shadow-card) !important;
+        }
+    </style>
+</head>
+<body>
+    <!-- Background Effects -->
+    <div class="bg-effects">
+        <div class="bg-orb bg-orb--1"></div>
+        <div class="bg-orb bg-orb--2"></div>
+        <div class="bg-orb bg-orb--3"></div>
+        <div class="bg-orb bg-orb--4"></div>
+    </div>
+
+    <!-- Particles -->
+    <div class="particles" id="particles"></div>
+
+    <!-- Main App -->
+    <div class="app">
+        <!-- Hero -->
+        <section class="hero">
+
+            <h1 class="hero__logo">AI STARS</h1>
+            <p class="hero__subtitle">Нейросеть для Brawl Stars</p>
+
+        </section>
+
+        <!--
+        removed -->
+
+        <!-- Currency Selector -->
+        <section class="currency-section">
+            <h2 class="section-title">💎 Выбери тариф</h2>
+            <div class="currency-tabs" id="currencyTabs">
+                <button class="currency-tab currency-tab--active" data-currency="stars" id="tabStars">
+                    <span class="currency-tab__icon">⭐</span>
+                    Звёзды
+                </button>
+                <button class="currency-tab" data-currency="rub" id="tabRub">
+                    <span class="currency-tab__icon">₽</span>
+                    Рубли
+                </button>
+                <button class="currency-tab" data-currency="usd" id="tabUsd">
+                    <span class="currency-tab__icon">$</span>
+                    Доллары
+                </button>
+            </div>
+        </section>
+
+        <!-- Pricing Cards -->
+        <section class="pricing" id="pricingCards">
+            <!-- Month Card -->
+            <div class="price-card price-card--month" id="cardMonth">
+                <div class="price-card__header">
+                    <div class="price-card__icon-wrap">📅</div>
+                    <div>
+                        <div class="price-card__title">На месяц</div>
+                        <div class="price-card__desc">Попробуй возможности</div>
+                    </div>
+                </div>
+                <div class="price-card__price-row">
+                    <span class="price-card__amount" id="priceMonth">200</span>
+                    <span class="price-card__currency" id="currencyMonth">⭐</span>
+                    <span class="price-card__period">/ мес</span>
+                </div>
+                <div class="price-card__features">
+                    <div class="price-card__feature">
+                        <span class="price-card__feature-icon">🏆</span>
+                        <span>Фарм кубков</span>
+                    </div>
+                    <div class="price-card__feature">
+                        <span class="price-card__feature-icon">⚡</span>
+                        <span>Автопуш всех персонажей на 1-2-3 прайм</span>
+                    </div>
+                    <div class="price-card__feature">
+                        <span class="price-card__feature-icon">🎖️</span>
+                        <span>Фарм ранга в ранговом режиме</span>
+                    </div>
+                    <div class="price-card__feature">
+                        <span class="price-card__feature-icon">🕐</span>
+                        <span>Работа 24/7</span>
+                    </div>
+                    <div class="price-card__feature">
+                        <span class="price-card__feature-icon">🎯</span>
+                        <span>Авто Уклонение + Аимбот (точность 80%)</span>
+                    </div>
+                    <div class="price-card__feature">
+                        <span class="price-card__feature-icon">🎁</span>
+                        <span>Открытие стар дропов, награды с пасса и пути славы</span>
+                    </div>
+                    <div class="price-card__feature">
+                        <span class="price-card__feature-icon">🎮</span>
+                        <span>Все режимы (кроме ивентов)</span>
+                    </div>
+                    <div class="price-card__feature">
+                        <span class="price-card__feature-icon">🖥️</span>
+                        <span>Несколько окон эмулятора одновременно</span>
+                    </div>
+                    <div class="price-card__feature">
+                        <span class="price-card__feature-icon">🔄</span>
+                        <span>Смена тимейтов после каждой игры</span>
+                    </div>
+                </div>
+                <button class="buy-btn buy-btn--month" id="buyMonth" onclick="handleBuy('month')">
+                    <span class="buy-btn__icon">⚡</span>
+                    Купить на месяц
+                </button>
+            </div>
+
+            <!-- Forever Card -->
+            <div class="price-card price-card--forever" id="cardForever">
+                <div class="price-card__popular">🔥 ВЫГОДНО</div>
+                <div class="price-card__header">
+                    <div class="price-card__icon-wrap">♾️</div>
+                    <div>
+                        <div class="price-card__title">Навсегда</div>
+                        <div class="price-card__desc">Лучшая инвестиция</div>
+                    </div>
+                </div>
+                <div class="price-card__price-row">
+                    <span class="price-card__amount" id="priceForever">650</span>
+                    <span class="price-card__currency" id="currencyForever">⭐</span>
+                    <span class="price-card__period">единоразово</span>
+                </div>
+                <div class="price-card__features">
+                    <div class="price-card__feature">
+                        <span class="price-card__feature-icon">✅</span>
+                        <span>Всё из подписки «На месяц»</span>
+                    </div>
+                    <div class="price-card__feature">
+                        <span class="price-card__feature-icon">💬</span>
+                        <span>Приоритетная поддержка 24/7</span>
+                    </div>
+                    <div class="price-card__feature">
+                        <span class="price-card__feature-icon">📖</span>
+                        <span>Гайд по окупу процесса</span>
+                    </div>
+                    <div class="price-card__feature">
+                        <span class="price-card__feature-icon">⚙️</span>
+                        <span>Кфг владельца</span>
+                    </div>
+                    <div class="price-card__feature">
+                        <span class="price-card__feature-icon">🔄</span>
+                        <span>Ранний доступ к новым функциям</span>
+                    </div>
+                </div>
+                <button class="buy-btn buy-btn--forever" id="buyForever" onclick="handleBuy('forever')">
+                    <span class="buy-btn__icon">💎</span>
+                    Купить навсегда
+                </button>
+            </div>
+        </section>
+
+        <!-- Guarantee -->
+        <section class="guarantee">
+            <div class="guarantee__icon">🛡️</div>
+            <div class="guarantee__title">Гарантия качества</div>
+            <div class="guarantee__text">
+                Если нейросеть не оправдает ожиданий — мы вернём деньги в течение 24 часов. Без вопросов.
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <footer class="footer">
+            <p class="footer__text">
+                AI Stars © 2026<br>
+                Нейросеть для Brawl Stars<br>
+                <a href="#" class="footer__link">Политика конфиденциальности</a>
+            </p>
+        </footer>
+    </div>
+
+    <!-- Success Overlay -->
+    <div class="overlay" id="successOverlay">
+        <div class="overlay__content">
+            <div class="overlay__icon">🎉</div>
+            <div class="overlay__title">Заказ оформлен!</div>
+            <div class="overlay__text" id="overlayText">
+                Данные отправлены. Следуйте инструкциям в чате бота.
+            </div>
+            <button class="overlay__btn" onclick="closeOverlay()">Понятно</button>
+        </div>
+    </div>
+
+    <script>
+        // ===== TELEGRAM WEB APP INIT =====
+        const tg = window.Telegram?.WebApp;
+        if (tg) {
+            tg.ready();
+            tg.expand();
+            tg.enableClosingConfirmation();
+
+            // Set header color
+            try {
+                tg.setHeaderColor('#0a0a1a');
+                tg.setBackgroundColor('#0a0a1a');
+            } catch (e) {}
+        }
+
+        // ===== PRICE DATA =====
+        const prices = {
+            stars: {
+                month: { amount: '200', symbol: '⭐', label: 'звёзд' },
+                forever: { amount: '650', symbol: '⭐', label: 'звёзд' }
+            },
+            rub: {
+                month: { amount: '250', symbol: '₽', label: '₽' },
+                forever: { amount: '800', symbol: '₽', label: '₽' }
+            },
+            usd: {
+                month: { amount: '3', symbol: '$', label: '$' },
+                forever: { amount: '10', symbol: '$', label: '$' }
+            }
+        };
+
+        let currentCurrency = 'stars';
+
+        // ===== CURRENCY SWITCHING =====
+        document.querySelectorAll('.currency-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const currency = tab.dataset.currency;
+                if (currency === currentCurrency) return;
+
+                currentCurrency = currency;
+
+                // Update tab states
+                document.querySelectorAll('.currency-tab').forEach(t => {
+                    t.classList.remove('currency-tab--active');
+                });
+                tab.classList.add('currency-tab--active');
+
+                // Update prices with animation
+                updatePrices(currency);
+
+                // Haptic feedback
+                if (tg?.HapticFeedback) {
+                    tg.HapticFeedback.selectionChanged();
+                }
+            });
+        });
+
+        function updatePrices(currency) {
+            const priceMonth = document.getElementById('priceMonth');
+            const priceForever = document.getElementById('priceForever');
+            const currencyMonth = document.getElementById('currencyMonth');
+            const currencyForever = document.getElementById('currencyForever');
+
+            // Animate out
+            [priceMonth, priceForever].forEach(el => {
+                el.style.transition = 'all 0.2s ease';
+                el.style.opacity = '0';
+                el.style.transform = 'translateY(-10px)';
+            });
+
+            setTimeout(() => {
+                const p = prices[currency];
+                priceMonth.textContent = p.month.amount;
+                priceForever.textContent = p.forever.amount;
+                currencyMonth.textContent = p.month.symbol;
+                currencyForever.textContent = p.forever.symbol;
+
+                // Animate in
+                [priceMonth, priceForever].forEach(el => {
+                    el.style.transform = 'translateY(10px)';
+                    requestAnimationFrame(() => {
+                        el.style.opacity = '1';
+                        el.style.transform = 'translateY(0)';
+                    });
+                });
+            }, 200);
+        }
+
+        // ===== BUY HANDLER =====
+        function handleBuy(period) {
+            const data = {
+                action: 'buy',
+                currency: currentCurrency,
+                period: period
+            };
+
+            // Haptic feedback
+            if (tg?.HapticFeedback) {
+                tg.HapticFeedback.impactOccurred('medium');
+            }
+
+            if (tg) {
+                // Send data to bot
+                tg.sendData(JSON.stringify(data));
+            } else {
+                // Fallback for testing outside Telegram
+                showOverlay(period);
+                console.log('Purchase data:', data);
+            }
+        }
+
+        // ===== OVERLAY =====
+        function showOverlay(period) {
+            const overlay = document.getElementById('successOverlay');
+            const text = document.getElementById('overlayText');
+
+            if (currentCurrency === 'stars') {
+                text.textContent = 'Сейчас откроется окно оплаты через Telegram Stars.';
+            } else {
+                text.textContent = 'Реквизиты для оплаты отправлены в чат. Следуйте инструкциям!';
+            }
+
+            overlay.classList.add('overlay--visible');
+        }
+
+        function closeOverlay() {
+            const overlay = document.getElementById('successOverlay');
+            overlay.classList.remove('overlay--visible');
+            if (tg) {
+                tg.close();
+            }
+        }
+
+        // ===== PARTICLES GENERATOR =====
+        function createParticles() {
+            const container = document.getElementById('particles');
+            const particleCount = 25;
+
+            for (let i = 0; i < particleCount; i++) {
+                const particle = document.createElement('div');
+                particle.className = 'particle';
+
+                const colors = [
+                    'rgba(124, 58, 237, 0.6)',
+                    'rgba(59, 130, 246, 0.6)',
+                    'rgba(6, 182, 212, 0.5)',
+                    'rgba(236, 72, 153, 0.5)',
+                    'rgba(168, 85, 247, 0.6)',
+                ];
+
+                particle.style.left = Math.random() * 100 + '%';
+                particle.style.width = (Math.random() * 3 + 1) + 'px';
+                particle.style.height = particle.style.width;
+                particle.style.background = colors[Math.floor(Math.random() * colors.length)];
+                particle.style.animationDuration = (Math.random() * 15 + 10) + 's';
+                particle.style.animationDelay = (Math.random() * 15) + 's';
+
+                container.appendChild(particle);
+            }
+        }
+
+        createParticles();
+
+        // ===== CARD HOVER EFFECTS =====
+        document.querySelectorAll('.price-card').forEach(card => {
+            card.addEventListener('touchstart', () => {
+                if (tg?.HapticFeedback) {
+                    tg.HapticFeedback.selectionChanged();
+                }
+            }, { passive: true });
+        });
+
+        // ===== COUNTER ANIMATION =====
+        function animateCounters() {
+            document.querySelectorAll('.stat__value').forEach(el => {
+                const text = el.textContent;
+                const num = parseInt(text);
+                if (isNaN(num)) return;
+
+                const suffix = text.replace(num.toString(), '');
+                let current = 0;
+                const step = Math.ceil(num / 40);
+                const interval = setInterval(() => {
+                    current += step;
+                    if (current >= num) {
+                        current = num;
+                        clearInterval(interval);
+                    }
+                    el.textContent = current + suffix;
+                }, 30);
+            });
+        }
+
+        // Run counter animation when page is visible
+        const observer = new IntersectionObserver(
+            (entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        animateCounters();
+                        observer.disconnect();
+                    }
+                });
+            },
+            { threshold: 0.5 }
+        );
+
+        const statsEl = document.querySelector('.stats');
+        if (statsEl) observer.observe(statsEl);
+    </script>
+</body>
+</html>
