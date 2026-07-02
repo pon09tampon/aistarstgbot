@@ -135,6 +135,7 @@ async def process_purchase(message: types.Message, currency: str, period: str):
                     inline_keyboard=[
                         [InlineKeyboardButton(text=f"💳 Оплатить ${amount} в CryptoBot", url=pay_url)],
                         [InlineKeyboardButton(text="🔄 Проверить оплату", callback_data=f"check_crypto_{invoice_id}_{period}")],
+                        [InlineKeyboardButton(text="◀️ Назад", callback_data="back_start")],
                     ]
                 )
                 await message.answer(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
@@ -166,7 +167,7 @@ async def process_purchase(message: types.Message, currency: str, period: str):
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
                 [InlineKeyboardButton(text="✅ Я ОПЛАТИЛ", callback_data="paid_rub")],
-                [InlineKeyboardButton(text="◀️ Назад", callback_data="shop")],
+                [InlineKeyboardButton(text="◀️ Назад", callback_data="back_start")],
             ]
         )
 
