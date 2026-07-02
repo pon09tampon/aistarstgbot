@@ -21,6 +21,7 @@ else:
 
 # ===== БАЗА ДАННЫХ =====
 DATABASE_PATH = os.getenv("DATABASE_PATH", "aistars.db")
+DATABASE_URL = os.getenv("DATABASE_URL")
 
 # ===== ТАРИФЫ =====
 PRICES = {
