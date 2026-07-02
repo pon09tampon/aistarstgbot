@@ -1116,13 +1116,23 @@
                 tg.HapticFeedback.impactOccurred('medium');
             }
 
-            if (tg) {
-                // Send data to bot
-                tg.sendData(JSON.stringify(data));
+            try {
+                if (tg && tg.initData && tg.sendData) {
+                    tg.sendData(JSON.stringify(data));
+                }
+            } catch (e) {
+                console.log('sendData error:', e);
+            }
+
+            // Deep link method for WebApp opened via Inline / Menu buttons
+            const param = `buy_${currentCurrency}_${period}`;
+            const deepLink = `https://t.me/AiStars1337_bot?start=${param}`;
+
+            if (tg && tg.openTelegramLink) {
+                tg.openTelegramLink(deepLink);
+                setTimeout(() => { try { tg.close(); } catch(e){} }, 300);
             } else {
-                // Fallback for testing outside Telegram
-                showOverlay(period);
-                console.log('Purchase data:', data);
+                window.location.href = deepLink;
             }
         }
 

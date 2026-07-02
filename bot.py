@@ -8,7 +8,7 @@ import logging
 from datetime import datetime
 
 from aiogram import Bot, Dispatcher, F, types
-from aiogram.filters import Command, CommandStart
+from aiogram.filters import Command, CommandStart, CommandObject
 from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
@@ -38,6 +38,7 @@ bot = Bot(token=BOT_TOKEN)
 crypto_pay = CryptoPay(CRYPTO_PAY_TOKEN) if CRYPTO_PAY_TOKEN else None
 dp = Dispatcher()
 
+
 # ===== ПРОВЕРКА НАЛИЧИЯ WEBAPP URL =====
 def is_webapp_configured() -> bool:
     return WEBAPP_URL and WEBAPP_URL != "YOUR_WEBAPP_URL_HERE" and WEBAPP_URL.startswith("https")
@@ -57,15 +58,129 @@ def get_shop_button():
         )
 
 
+async def process_purchase(message: types.Message, currency: str, period: str):
+    """Общий обработчик создания платежей (из WebApp, инлайн или deep link)."""
+    if currency not in PRICES or period not in PRICES[currency]:
+        await message.answer("❌ Неверные данные тарифа.")
+        return
+
+    price_info = PRICES[currency][period]
+    user_id = message.from_user.id
+
+    if currency == "stars":
+        await bot.send_invoice(
+            chat_id=user_id,
+            title="AI Stars — Бот для Brawl Stars",
+            description=price_info["label"],
+            payload=json.dumps({
+                "user_id": user_id,
+                "period": period,
+                "currency": "XTR",
+                "amount": price_info["amount"],
+            }),
+            provider_token="",
+            currency="XTR",
+            prices=[LabeledPrice(label=price_info["label"], amount=price_info["amount"])],
+        )
+
+    elif currency == "usd":
+        if crypto_pay:
+            try:
+                invoice = await crypto_pay.create_invoice(
+                    amount=price_info["amount"],
+                    currency_type="fiat",
+                    fiat="USD",
+                    description=f"AI Stars — {price_info['label']}",
+                    payload=json.dumps({"user_id": user_id, "period": period, "amount": price_info["amount"]}),
+                )
+                invoice_id = invoice["invoice_id"]
+                pay_url = invoice.get("bot_invoice_url") or invoice.get("mini_app_invoice_url") or invoice.get("pay_url")
+
+                text = (
+                    f"💎 **Оплата через CryptoBot**\n\n"
+                    f"📦 Товар: AI Stars — {price_info['label']}\n"
+                    f"💰 Сумма: **${price_info['amount']}**\n\n"
+                    f"Нажмите кнопку ниже для оплаты через @CryptoBot.\n"
+                    f"После оплаты нажмите кнопку «Проверить оплату»."
+                )
+
+                keyboard = InlineKeyboardMarkup(
+                    inline_keyboard=[
+                        [InlineKeyboardButton(text=f"💳 Оплатить ${price_info['amount']} в CryptoBot", url=pay_url)],
+                        [InlineKeyboardButton(text="🔄 Проверить оплату", callback_data=f"check_crypto_{invoice_id}_{period}")],
+                    ]
+                )
+                await message.answer(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+                return
+            except Exception as e:
+                logger.error(f"CryptoPay error: {e}")
+
+        await message.answer("❌ Ошибка при создании счета в CryptoBot.")
+
+    elif currency == "rub":
+        payment_id = await create_pending_payment(
+            user_id,
+            price_info["currency"],
+            price_info["amount"],
+            period,
+        )
+
+        currency_symbol = "₽"
+        payment_details = (
+            "💳 **Реквизиты для оплаты:**\n"
+            "• Банк: Сбер / Тинькофф\n"
+            "• Номер карты: `XXXX XXXX XXXX XXXX`\n"
+            "• Или по номеру телефона: `+7 (XXX) XXX-XX-XX`\n\n"
+            "⚠️ **ВАЖНО:** В комментарии к переводу укажите:\n"
+            f"`AI Stars #{payment_id}`"
+        )
+
+        text = (
+            f"🧾 **Заказ #{payment_id}**\n\n"
+            f"📦 Товар: AI Stars — {price_info['label']}\n"
+            f"💰 Сумма: **{price_info['amount']} {currency_symbol}**\n\n"
+            f"{payment_details}\n\n"
+            f"После оплаты администратор проверит платёж и активирует подписку.\n"
+            f"Обычно это занимает до 15 минут ⏱"
+        )
+
+        await message.answer(text, parse_mode=ParseMode.MARKDOWN)
+
+        for admin_id in ADMIN_IDS:
+            try:
+                admin_text = (
+                    f"🔔 **Новый заказ #{payment_id}!**\n\n"
+                    f"👤 Пользователь: @{message.from_user.username or 'N/A'} "
+                    f"(ID: `{user_id}`)\n"
+                    f"📦 Период: **{period}**\n"
+                    f"💰 Сумма: **{price_info['amount']} {currency_symbol}**\n\n"
+                    f"Для подтверждения:\n"
+                    f"`/confirm {payment_id}`"
+                )
+                await bot.send_message(admin_id, admin_text, parse_mode=ParseMode.MARKDOWN)
+            except Exception as e:
+                logger.error(f"Не удалось отправить уведомление админу {admin_id}: {e}")
+
+
 # ===== КОМАНДА /start =====
 @dp.message(CommandStart())
-async def cmd_start(message: types.Message):
+async def cmd_start(message: types.Message, command: CommandObject = None):
     """Приветствие и кнопка Web App."""
     user = await get_or_create_user(
         message.from_user.id,
         message.from_user.username,
         message.from_user.first_name,
     )
+
+    # Проверка deep link от WebApp (например: /start buy_stars_month)
+    args = command.args if command else None
+    if args and args.startswith("buy_"):
+        parts = args.split("_")
+        if len(parts) >= 3:
+            currency = parts[1]
+            period = parts[2]
+            await process_purchase(message, currency, period)
+            return
 
     # Проверим подписку
     sub = await check_subscription(message.from_user.id)
