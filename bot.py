@@ -1,5 +1,5 @@
 """
-AI Stars Bot — Telegram-бот для продажи нейросети по Brawl Stars
+AI Stars Bot — Telegram-бот для продажи подписки с панелью администратора
 """
 
 import asyncio
@@ -9,11 +9,13 @@ from datetime import datetime
 
 from aiogram import Bot, Dispatcher, F, types
 from aiogram.filters import Command, CommandStart, CommandObject
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.types import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     LabeledPrice,
-    MenuButtonWebApp,
     PreCheckoutQuery,
     WebAppInfo,
 )
@@ -28,7 +30,14 @@ from database import (
     check_subscription,
     create_pending_payment,
     confirm_payment,
+    reject_payment,
     get_pending_payments,
+    get_setting,
+    set_setting,
+    create_support_ticket,
+    get_open_tickets,
+    reply_support_ticket,
+    get_all_user_ids,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -36,10 +45,22 @@ logger = logging.getLogger(__name__)
 
 bot = Bot(token=BOT_TOKEN)
 crypto_pay = CryptoPay(CRYPTO_PAY_TOKEN) if CRYPTO_PAY_TOKEN else None
-dp = Dispatcher()
+dp = Dispatcher(storage=MemoryStorage())
 
 
-# ===== ПРОВЕРКА НАЛИЧИЯ WEBAPP URL =====
+# ===== FSM СОСТОЯНИЯ =====
+class AdminStates(StatesGroup):
+    waiting_for_card = State()
+    waiting_for_broadcast = State()
+    waiting_for_ticket_reply = State()
+    waiting_for_price_value = State()
+
+
+class UserStates(StatesGroup):
+    waiting_for_support_message = State()
+
+
+# ===== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ =====
 def is_webapp_configured() -> bool:
     return WEBAPP_URL and WEBAPP_URL != "YOUR_WEBAPP_URL_HERE" and WEBAPP_URL.startswith("https")
 
@@ -58,55 +79,67 @@ def get_shop_button():
         )
 
 
+async def get_price(currency: str, period: str) -> float:
+    """Динамическое получение цены с учётом настроек в БД."""
+    custom_price = await get_setting(f"price_{currency}_{period}")
+    if custom_price:
+        try:
+            return float(custom_price)
+        except ValueError:
+            pass
+    return PRICES.get(currency, {}).get(period, {}).get("amount", 0)
+
+
 async def process_purchase(message: types.Message, currency: str, period: str):
-    """Общий обработчик создания платежей (из WebApp, инлайн или deep link)."""
+    """Общий обработчик создания платежей."""
     if currency not in PRICES or period not in PRICES[currency]:
         await message.answer("❌ Неверные данные тарифа.")
         return
 
-    price_info = PRICES[currency][period]
+    amount = await get_price(currency, period)
     user_id = message.from_user.id
+    label = f"Подписка ({period})"
 
     if currency == "stars":
         await bot.send_invoice(
             chat_id=user_id,
             title="AI Stars — Бот для Brawl Stars",
-            description=price_info["label"],
+            description=f"AI Stars — {label} ({int(amount)} ⭐)",
             payload=json.dumps({
                 "user_id": user_id,
                 "period": period,
                 "currency": "XTR",
-                "amount": price_info["amount"],
+                "amount": amount,
             }),
             provider_token="",
             currency="XTR",
-            prices=[LabeledPrice(label=price_info["label"], amount=price_info["amount"])],
+            prices=[LabeledPrice(label=label, amount=int(amount))],
         )
 
     elif currency == "usd":
         if crypto_pay:
             try:
                 invoice = await crypto_pay.create_invoice(
-                    amount=price_info["amount"],
+                    amount=amount,
                     currency_type="fiat",
                     fiat="USD",
-                    description=f"AI Stars — {price_info['label']}",
-                    payload=json.dumps({"user_id": user_id, "period": period, "amount": price_info["amount"]}),
+                    description=f"AI Stars — {label}",
+                    payload=json.dumps({"user_id": user_id, "period": period, "amount": amount}),
                 )
                 invoice_id = invoice["invoice_id"]
                 pay_url = invoice.get("bot_invoice_url") or invoice.get("mini_app_invoice_url") or invoice.get("pay_url")
 
                 text = (
                     f"💎 **Оплата через CryptoBot**\n\n"
-                    f"📦 Товар: AI Stars — {price_info['label']}\n"
-                    f"💰 Сумма: **${price_info['amount']}**\n\n"
+                    f"📦 Товар: AI Stars — {label}\n"
+                    f"💰 Сумма: **${amount}**\n\n"
                     f"Нажмите кнопку ниже для оплаты через @CryptoBot.\n"
                     f"После оплаты нажмите кнопку «Проверить оплату»."
                 )
 
                 keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
-                        [InlineKeyboardButton(text=f"💳 Оплатить ${price_info['amount']} в CryptoBot", url=pay_url)],
+                        [InlineKeyboardButton(text=f"💳 Оплатить ${amount} в CryptoBot", url=pay_url)],
                         [InlineKeyboardButton(text="🔄 Проверить оплату", callback_data=f"check_crypto_{invoice_id}_{period}")],
                     ]
                 )
@@ -120,59 +153,40 @@ async def process_purchase(message: types.Message, currency: str, period: str):
     elif currency == "rub":
         payment_id = await create_pending_payment(
             user_id,
-            price_info["currency"],
-            price_info["amount"],
+            "RUB",
+            amount,
             period,
         )
 
-        currency_symbol = "₽"
-        payment_details = (
-            "💳 **Реквизиты для оплаты:**\n"
-            "• Банк: Сбер / Тинькофф\n"
-            "• Номер карты: `XXXX XXXX XXXX XXXX`\n"
-            "• Или по номеру телефона: `+7 (XXX) XXX-XX-XX`\n\n"
-            "⚠️ **ВАЖНО:** В комментарии к переводу укажите:\n"
-            f"`AI Stars #{payment_id}`"
-        )
+        card_number = await get_setting("card_number", "0000 0000 0000 0000")
 
         text = (
             f"🧾 **Заказ #{payment_id}**\n\n"
-            f"📦 Товар: AI Stars — {price_info['label']}\n"
-            f"💰 Сумма: **{price_info['amount']} {currency_symbol}**\n\n"
-            f"{payment_details}\n\n"
-            f"После оплаты администратор проверит платёж и активирует подписку.\n"
-            f"Обычно это занимает до 15 минут ⏱"
+            f"📦 Товар: AI Stars — {label}\n"
+            f"💰 Сумма: **{amount} ₽**\n\n"
+            f"💳 **Номер карты:** `{card_number}`\n\n"
+            f"⚠️ **ВАЖНО:** В комментарии к переводу укажите:\n"
+            f"`AI Stars #{payment_id}`\n\n"
+            f"После оплаты администратор проверит платёж и активирует подписку."
         )
 
         await message.answer(text, parse_mode=ParseMode.MARKDOWN)
 
-        for admin_id in ADMIN_IDS:
-            try:
-                admin_text = (
-                    f"🔔 **Новый заказ #{payment_id}!**\n\n"
-                    f"👤 Пользователь: @{message.from_user.username or 'N/A'} "
-                    f"(ID: `{user_id}`)\n"
-                    f"📦 Период: **{period}**\n"
-                    f"💰 Сумма: **{price_info['amount']} {currency_symbol}**\n\n"
-                    f"Для подтверждения:\n"
-                    f"`/confirm {payment_id}`"
-                )
-                await bot.send_message(admin_id, admin_text, parse_mode=ParseMode.MARKDOWN)
-            except Exception as e:
-                logger.error(f"Не удалось отправить уведомление админу {admin_id}: {e}")
-
 
 # ===== КОМАНДА /start =====
 @dp.message(CommandStart())
-async def cmd_start(message: types.Message, command: CommandObject = None):
-    """Приветствие и кнопка Web App."""
+async def cmd_start(message: types.Message, command: CommandObject = None, state: FSMContext = None):
+    """Приветствие и главное меню."""
+    if state:
+        await state.clear()
+
     user = await get_or_create_user(
         message.from_user.id,
         message.from_user.username,
         message.from_user.first_name,
     )
 
-    # Проверка deep link от WebApp (например: /start buy_stars_month)
+    # Проверка deep link от WebApp (/start buy_stars_month)
     args = command.args if command else None
     if args and args.startswith("buy_"):
         parts = args.split("_")
@@ -182,7 +196,6 @@ async def cmd_start(message: types.Message, command: CommandObject = None):
             await process_purchase(message, currency, period)
             return
 
-    # Проверим подписку
     sub = await check_subscription(message.from_user.id)
 
     if sub["active"]:
@@ -202,23 +215,17 @@ async def cmd_start(message: types.Message, command: CommandObject = None):
         f"👇 Нажми кнопку ниже, чтобы купить подписку!"
     )
 
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [get_shop_button()],
-            [
-                InlineKeyboardButton(
-                    text="📊 Мой статус",
-                    callback_data="check_status",
-                )
-            ],
-            [
-                InlineKeyboardButton(
-                    text="💬 Поддержка",
-                    callback_data="support",
-                )
-            ],
-        ]
-    )
+    buttons = [
+        [get_shop_button()],
+        [InlineKeyboardButton(text="📊 Мой статус", callback_data="check_status")],
+        [InlineKeyboardButton(text="💬 Поддержка", callback_data="support")],
+    ]
+
+    # Показываем кнопку админ-панели ТОЛЬКО администраторам
+    if message.from_user.id in ADMIN_IDS:
+        buttons.append([InlineKeyboardButton(text="👑 Админ-панель", callback_data="admin_panel")])
+
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
     await message.answer(
         welcome_text,
@@ -227,7 +234,7 @@ async def cmd_start(message: types.Message, command: CommandObject = None):
     )
 
 
-# ===== ИНЛАЙН МАГАЗИН (без WebApp) =====
+# ===== ИНЛАЙН МАГАЗИН =====
 @dp.callback_query(F.data == "shop")
 async def shop_callback(callback: types.CallbackQuery):
     """Магазин через инлайн-кнопки."""
@@ -237,18 +244,10 @@ async def shop_callback(callback: types.CallbackQuery):
     )
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(text="⭐ Звёзды Telegram", callback_data="currency_stars"),
-            ],
-            [
-                InlineKeyboardButton(text="₽ Рубли", callback_data="currency_rub"),
-            ],
-            [
-                InlineKeyboardButton(text="$ Доллары", callback_data="currency_usd"),
-            ],
-            [
-                InlineKeyboardButton(text="◀️ Назад", callback_data="back_start"),
-            ],
+            [InlineKeyboardButton(text="⭐ Звёзды Telegram", callback_data="currency_stars")],
+            [InlineKeyboardButton(text="₽ Рубли", callback_data="currency_rub")],
+            [InlineKeyboardButton(text="$ Доллары", callback_data="currency_usd")],
+            [InlineKeyboardButton(text="◀️ Назад", callback_data="back_start")],
         ]
     )
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
@@ -259,19 +258,20 @@ async def shop_callback(callback: types.CallbackQuery):
 async def currency_callback(callback: types.CallbackQuery):
     """Выбор тарифа после выбора валюты."""
     currency = callback.data.replace("currency_", "")
-
     currency_names = {"stars": "⭐ Звёзды", "rub": "₽ Рубли", "usd": "$ Доллары"}
-    p = PRICES[currency]
+
+    p_month = await get_price(currency, "month")
+    p_forever = await get_price(currency, "forever")
 
     if currency == "stars":
-        month_label = f"{p['month']['amount']} ⭐"
-        forever_label = f"{p['forever']['amount']} ⭐"
+        month_label = f"{int(p_month)} ⭐"
+        forever_label = f"{int(p_forever)} ⭐"
     elif currency == "rub":
-        month_label = f"{p['month']['amount']} ₽"
-        forever_label = f"{p['forever']['amount']} ₽"
+        month_label = f"{p_month} ₽"
+        forever_label = f"{p_forever} ₽"
     else:
-        month_label = f"${p['month']['amount']}"
-        forever_label = f"${p['forever']['amount']}"
+        month_label = f"${p_month}"
+        forever_label = f"${p_forever}"
 
     text = (
         f"💎 **Тарифы ({currency_names[currency]})**\n\n"
@@ -288,21 +288,9 @@ async def currency_callback(callback: types.CallbackQuery):
 
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [
-                InlineKeyboardButton(
-                    text=f"📅 На месяц — {month_label}",
-                    callback_data=f"buy_{currency}_month",
-                ),
-            ],
-            [
-                InlineKeyboardButton(
-                    text=f"♾️ Навсегда — {forever_label} 🔥",
-                    callback_data=f"buy_{currency}_forever",
-                ),
-            ],
-            [
-                InlineKeyboardButton(text="◀️ Назад", callback_data="shop"),
-            ],
+            [InlineKeyboardButton(text=f"📅 На месяц — {month_label}", callback_data=f"buy_{currency}_month")],
+            [InlineKeyboardButton(text=f"♾️ Навсегда — {forever_label} 🔥", callback_data=f"buy_{currency}_forever")],
+            [InlineKeyboardButton(text="◀️ Назад", callback_data="shop")],
         ]
     )
     await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
@@ -312,132 +300,18 @@ async def currency_callback(callback: types.CallbackQuery):
 @dp.callback_query(F.data.startswith("buy_"))
 async def buy_callback(callback: types.CallbackQuery):
     """Обработка покупки через инлайн-кнопки."""
-    parts = callback.data.split("_")  # buy_stars_month
+    parts = callback.data.split("_")
     currency = parts[1]
     period = parts[2]
-    price_info = PRICES[currency][period]
-
-    if currency == "stars":
-        # Оплата через Telegram Stars
-        await bot.send_invoice(
-            chat_id=callback.from_user.id,
-            title="AI Stars — Бот для Brawl Stars",
-            description=price_info["label"],
-            payload=json.dumps({
-                "user_id": callback.from_user.id,
-                "period": period,
-                "currency": "XTR",
-                "amount": price_info["amount"],
-            }),
-            provider_token="",
-            currency="XTR",
-            prices=[LabeledPrice(label=price_info["label"], amount=price_info["amount"])],
-        )
-        await callback.answer()
-
-    elif currency == "usd":
-        if crypto_pay:
-            try:
-                invoice = await crypto_pay.create_invoice(
-                    amount=price_info["amount"],
-                    currency_type="fiat",
-                    fiat="USD",
-                    description=f"AI Stars — {price_info['label']}",
-                    payload=json.dumps({"user_id": callback.from_user.id, "period": period, "amount": price_info["amount"]}),
-                )
-                invoice_id = invoice["invoice_id"]
-                pay_url = invoice.get("bot_invoice_url") or invoice.get("mini_app_invoice_url") or invoice.get("pay_url")
-
-                text = (
-                    f"💎 **Оплата через CryptoBot**\n\n"
-                    f"📦 Товар: AI Stars — {price_info['label']}\n"
-                    f"💰 Сумма: **${price_info['amount']}**\n\n"
-                    f"Нажмите кнопку ниже для оплаты через @CryptoBot.\n"
-                    f"После оплаты нажмите кнопку «Проверить оплату»."
-                )
-
-                keyboard = InlineKeyboardMarkup(
-                    inline_keyboard=[
-                        [InlineKeyboardButton(text=f"💳 Оплатить ${price_info['amount']} в CryptoBot", url=pay_url)],
-                        [InlineKeyboardButton(text="🔄 Проверить оплату", callback_data=f"check_crypto_{invoice_id}_{period}")],
-                        [InlineKeyboardButton(text="◀️ Назад", callback_data="shop")],
-                    ]
-                )
-
-                await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
-                await callback.answer()
-                return
-            except Exception as e:
-                logger.error(f"CryptoPay invoice error: {e}")
-
-        # Фолбэк, если CryptoPay не сработал
-        payment_id = await create_pending_payment(
-            callback.from_user.id,
-            price_info["currency"],
-            price_info["amount"],
-            period,
-        )
-        text = (
-            f"🧾 **Заказ #{payment_id}**\n\n"
-            f"📦 Товар: AI Stars — {price_info['label']}\n"
-            f"💰 Сумма: **{price_info['amount']} $**\n\n"
-            f"💳 **Payment details:**\n"
-            f"• CryptoBot / Wallet\n\n"
-            f"После оплаты нажмите /status или свяжитесь с администратором."
-        )
-        await callback.message.edit_text(text, parse_mode=ParseMode.MARKDOWN)
-        await callback.answer()
-
-    elif currency == "rub":
-        payment_id = await create_pending_payment(
-            callback.from_user.id,
-            price_info["currency"],
-            price_info["amount"],
-            period,
-        )
-
-        currency_symbol = "₽"
-        payment_details = (
-            "💳 **Реквизиты для оплаты:**\n"
-            "• Банк: Сбер / Тинькофф\n"
-            "• Номер карты: `XXXX XXXX XXXX XXXX`\n"
-            "• Или по номеру телефона: `+7 (XXX) XXX-XX-XX`\n\n"
-            "⚠️ **ВАЖНО:** В комментарии к переводу укажите:\n"
-            f"`AI Stars #{payment_id}`"
-        )
-
-        text = (
-            f"🧾 **Заказ #{payment_id}**\n\n"
-            f"📦 Товар: AI Stars — {price_info['label']}\n"
-            f"💰 Сумма: **{price_info['amount']} {currency_symbol}**\n\n"
-            f"{payment_details}\n\n"
-            f"После оплаты администратор проверит платёж и активирует подписку.\n"
-            f"Обычно это занимает до 15 минут ⏱"
-        )
-
-        await callback.message.edit_text(text, parse_mode=ParseMode.MARKDOWN)
-        await callback.answer()
-
-        # Уведомим админов
-        for admin_id in ADMIN_IDS:
-            try:
-                admin_text = (
-                    f"🔔 **Новый заказ #{payment_id}!**\n\n"
-                    f"👤 Пользователь: @{callback.from_user.username or 'N/A'} "
-                    f"(ID: `{callback.from_user.id}`)\n"
-                    f"📦 Период: **{period}**\n"
-                    f"💰 Сумма: **{price_info['amount']} {currency_symbol}**\n\n"
-                    f"Для подтверждения:\n"
-                    f"`/confirm {payment_id}`"
-                )
-                await bot.send_message(admin_id, admin_text, parse_mode=ParseMode.MARKDOWN)
-            except Exception as e:
-                logger.error(f"Не удалось отправить уведомление админу {admin_id}: {e}")
+    await process_purchase(callback.message, currency, period)
+    await callback.answer()
 
 
 @dp.callback_query(F.data == "back_start")
-async def back_start_callback(callback: types.CallbackQuery):
+async def back_start_callback(callback: types.CallbackQuery, state: FSMContext = None):
     """Возврат к стартовому меню."""
+    if state:
+        await state.clear()
     await callback.message.delete()
     await cmd_start(callback.message)
     await callback.answer()
@@ -512,161 +386,445 @@ async def check_status_callback(callback: types.CallbackQuery):
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
             [get_shop_button()],
+            [InlineKeyboardButton(text="◀️ Назад", callback_data="back_start")],
         ]
     )
 
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+    await callback.answer()
+
+
+# ===== ПОДДЕРЖКА ПОЛЬЗОВАТЕЛЯ =====
+@dp.callback_query(F.data == "support")
+async def support_callback(callback: types.CallbackQuery, state: FSMContext):
+    await state.set_state(UserStates.waiting_for_support_message)
+    text = (
+        "💬 **Поддержка AI Stars**\n\n"
+        "Опишите вашу проблему прямо следующим сообщением в чат.\n\n"
+        "Мы ответим в ближайшее время! 🙌"
+    )
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="back_start")]]
+    )
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+    await callback.answer()
+
+
+@dp.message(UserStates.waiting_for_support_message)
+async def handle_user_support_message(message: types.Message, state: FSMContext):
+    """Приём сообщения в поддержку от пользователя."""
+    ticket_id = await create_support_ticket(
+        message.from_user.id,
+        message.from_user.username or "N/A",
+        message.text,
+    )
+    await state.clear()
+    await message.answer(
+        f"✅ **Ваше обращение #{ticket_id} отправлено в поддержку!**\n"
+        f"Ожидайте ответа от администратора.",
+        parse_mode=ParseMode.MARKDOWN,
+    )
+
+
+# =====================================================================
+# 👑 АДМИН-ПАНЕЛЬ (ТОЛЬКО ДЛЯ ADMIN_IDS)
+# =====================================================================
+
+@dp.message(Command("admin"))
+@dp.callback_query(F.data == "admin_panel")
+async def show_admin_panel(event: types.Message | types.CallbackQuery, state: FSMContext = None):
+    """Главная страница панели администратора."""
+    user_id = event.from_user.id if isinstance(event, types.Message) else event.from_user.id
+    if user_id not in ADMIN_IDS:
+        if isinstance(event, types.CallbackQuery):
+            await event.answer("⛔ У вас нет прав доступа к админ-панели.", show_alert=True)
+        else:
+            await event.answer("⛔ У вас нет прав доступа к админ-панели.")
+        return
+
+    if state:
+        await state.clear()
+
+    pending_payments = await get_pending_payments()
+    open_tickets = await get_open_tickets()
+    card_number = await get_setting("card_number", "Не задана")
+
+    text = (
+        "👑 **Панель Администратора AI Stars**\n\n"
+        f"💳 **Текущая карта:** `{card_number}`\n"
+        f"📋 **Ожидают подтверждения:** {len(pending_payments)} заказов\n"
+        f"💬 **Открытые тикеты:** {len(open_tickets)} шт.\n\n"
+        f"Выберите раздел:"
+    )
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text=f"📋 Заказы ({len(pending_payments)})", callback_data="admin_orders")],
+            [InlineKeyboardButton(text=f"💬 Поддержка ({len(open_tickets)})", callback_data="admin_tickets")],
+            [InlineKeyboardButton(text="💳 Сменить карту", callback_data="admin_change_card")],
+            [InlineKeyboardButton(text="📢 Сделать рассылку", callback_data="admin_broadcast")],
+            [InlineKeyboardButton(text="💰 Изменить цены", callback_data="admin_prices")],
+            [InlineKeyboardButton(text="◀️ Выйти из админки", callback_data="back_start")],
+        ]
+    )
+
+    if isinstance(event, types.CallbackQuery):
+        await event.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+        await event.answer()
+    else:
+        await event.answer(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+
+
+# ----- 1. ЗАКАЗЫ (ПОДТВЕРЖДЕНИЕ / ОТКЛОНЕНИЕ) -----
+@dp.callback_query(F.data == "admin_orders")
+async def admin_orders_callback(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS:
+        return
+
+    payments = await get_pending_payments()
+
+    if not payments:
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="◀️ Назад", callback_data="admin_panel")]]
+        )
+        await callback.message.edit_text("📭 Нет ожидающих заказов.", reply_markup=keyboard)
+        await callback.answer()
+        return
+
+    text = f"📋 **Ожидающие заказы ({len(payments)} шт.):**\n\n"
+    buttons = []
+
+    for p in payments[:10]:
+        text += (
+            f"**Заказ #{p['id']}** | @{p.get('username', 'N/A')} (ID: `{p['user_id']}`)\n"
+            f"💰 Сумма: {p['amount']} {p['currency']} | Тариф: {p['period']}\n\n"
+        )
+        buttons.append([
+            InlineKeyboardButton(text=f"✅ Подтвердить #{p['id']}", callback_data=f"adm_confirm_{p['id']}"),
+            InlineKeyboardButton(text=f"❌ Отклонить #{p['id']}", callback_data=f"adm_reject_{p['id']}"),
+        ])
+
+    buttons.append([InlineKeyboardButton(text="◀️ В админ-панель", callback_data="admin_panel")])
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+    await callback.answer()
+
+
+@dp.callback_query(F.data.startswith("adm_confirm_"))
+async def adm_confirm_order(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS:
+        return
+
+    payment_id = int(callback.data.replace("adm_confirm_", ""))
+    payment = await confirm_payment(payment_id)
+
+    if payment:
+        user_id = payment["user_id"]
+        period_text = "навсегда 🔥" if payment["period"] == "forever" else "на 1 месяц 📅"
+        try:
+            await bot.send_message(
+                user_id,
+                f"🎉 **Оплата подтверждена!**\n\n"
+                f"✅ Подписка активирована **{period_text}**\n"
+                f"💫 Спасибо за покупку!",
+                parse_mode=ParseMode.MARKDOWN,
+            )
+        except Exception as e:
+            logger.error(f"Не удалось отправить сообщение пользователю {user_id}: {e}")
+
+        await callback.answer(f"✅ Заказ #{payment_id} подтверждён!", show_alert=True)
+    else:
+        await callback.answer("❌ Платёж не найден или уже обработан.", show_alert=True)
+
+    await admin_orders_callback(callback)
+
+
+@dp.callback_query(F.data.startswith("adm_reject_"))
+async def adm_reject_order(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS:
+        return
+
+    payment_id = int(callback.data.replace("adm_reject_", ""))
+    payment = await reject_payment(payment_id)
+
+    if payment:
+        user_id = payment["user_id"]
+        try:
+            await bot.send_message(
+                user_id,
+                f"❌ **Ваш заказ #{payment_id} был отклонён администратором.**\n\n"
+                f"Если произошла ошибка — напишите в поддержку.",
+                parse_mode=ParseMode.MARKDOWN,
+            )
+        except Exception as e:
+            logger.error(f"Не удалось уведомить пользователя {user_id}: {e}")
+
+        await callback.answer(f"❌ Заказ #{payment_id} отклонён.", show_alert=True)
+    else:
+        await callback.answer("❌ Платёж не найден.", show_alert=True)
+
+    await admin_orders_callback(callback)
+
+
+# ----- 2. ПОДДЕРЖКА В АДМИНКЕ -----
+@dp.callback_query(F.data == "admin_tickets")
+async def admin_tickets_callback(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS:
+        return
+
+    tickets = await get_open_tickets()
+    if not tickets:
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[[InlineKeyboardButton(text="◀️ В админ-панель", callback_data="admin_panel")]]
+        )
+        await callback.message.edit_text("📭 Нет открытых обращений в поддержку.", reply_markup=keyboard)
+        await callback.answer()
+        return
+
+    text = f"💬 **Открытые обращения ({len(tickets)} шт.):**\n\n"
+    buttons = []
+
+    for t in tickets[:5]:
+        text += (
+            f"**Тикет #{t['id']}** от @{t['username']} (ID: `{t['user_id']}`):\n"
+            f"💬 `{t['message_text']}`\n\n"
+        )
+        buttons.append([InlineKeyboardButton(text=f"✉️ Ответить на #{t['id']}", callback_data=f"adm_reply_ticket_{t['id']}")])
+
+    buttons.append([InlineKeyboardButton(text="◀️ В админ-панель", callback_data="admin_panel")])
+    keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
+
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+    await callback.answer()
+
+
+@dp.callback_query(F.data.startswith("adm_reply_ticket_"))
+async def adm_start_ticket_reply(callback: types.CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in ADMIN_IDS:
+        return
+
+    ticket_id = int(callback.data.replace("adm_reply_ticket_", ""))
+    await state.update_data(reply_ticket_id=ticket_id)
+    await state.set_state(AdminStates.waiting_for_ticket_reply)
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="admin_panel")]]
+    )
     await callback.message.edit_text(
-        text,
+        f"✉️ **Введите ваш ответ на тикет #{ticket_id}:**",
         reply_markup=keyboard,
         parse_mode=ParseMode.MARKDOWN,
     )
     await callback.answer()
 
 
-# ===== ПОДДЕРЖКА =====
-@dp.callback_query(F.data == "support")
-async def support_callback(callback: types.CallbackQuery):
+@dp.message(AdminStates.waiting_for_ticket_reply)
+async def adm_send_ticket_reply(message: types.Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS:
+        return
+
+    data = await state.get_data()
+    ticket_id = data.get("reply_ticket_id")
+    await state.clear()
+
+    ticket = await reply_support_ticket(ticket_id, message.text)
+    if ticket:
+        try:
+            await bot.send_message(
+                ticket["user_id"],
+                f"💬 **Ответ от поддержки (по обращению #{ticket_id}):**\n\n"
+                f"{message.text}",
+                parse_mode=ParseMode.MARKDOWN,
+            )
+            await message.answer(f"✅ Ответ отправлен пользователю @{ticket['username']}!")
+        except Exception as e:
+            await message.answer(f"⚠️ Ответ сохранен, но не удалось доставить пользователю: {e}")
+    else:
+        await message.answer("❌ Ошибка: тикет не найден.")
+
+
+# ----- 3. СМЕНА РЕКВИЗИТОВ КАРТЫ -----
+@dp.callback_query(F.data == "admin_change_card")
+async def admin_change_card_callback(callback: types.CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in ADMIN_IDS:
+        return
+
+    card_number = await get_setting("card_number", "Не задана")
+    await state.set_state(AdminStates.waiting_for_card)
+
     text = (
-        "💬 **Поддержка AI Stars**\n\n"
-        "Опишите вашу проблему прямо в этом чате.\n\n"
-        "Мы ответим в ближайшее время! 🙌"
+        f"💳 **Смена реквизитов карты**\n\n"
+        f"Текущая карта: `{card_number}`\n\n"
+        f"Введите новый номер карты в ответ на это сообщение:"
     )
-    await callback.message.edit_text(text, parse_mode=ParseMode.MARKDOWN)
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="admin_panel")]]
+    )
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
     await callback.answer()
 
 
-# ===== ОБРАБОТКА ДАННЫХ ИЗ WEB APP =====
-@dp.message(F.web_app_data)
-async def handle_webapp_data(message: types.Message):
-    """Обработка данных, отправленных из Web App."""
+@dp.message(AdminStates.waiting_for_card)
+async def process_new_card(message: types.Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS:
+        return
+
+    new_card = message.text.strip()
+    await set_setting("card_number", new_card)
+    await state.clear()
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="◀️ В админ-панель", callback_data="admin_panel")]]
+    )
+    await message.answer(f"✅ **Номер карты успешно обновлён!**\nНовая карта: `{new_card}`", reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+
+
+# ----- 4. РАССЫЛКА -----
+@dp.callback_query(F.data == "admin_broadcast")
+async def admin_broadcast_callback(callback: types.CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in ADMIN_IDS:
+        return
+
+    await state.set_state(AdminStates.waiting_for_broadcast)
+    text = (
+        "📢 **Рассылка сообщений**\n\n"
+        "Введите текст сообщения, которое будет отправлено **ВСЕМ** пользователям бота:"
+    )
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="admin_panel")]]
+    )
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+    await callback.answer()
+
+
+@dp.message(AdminStates.waiting_for_broadcast)
+async def process_broadcast(message: types.Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS:
+        return
+
+    await state.clear()
+    users = await get_all_user_ids()
+    success_count = 0
+    fail_count = 0
+
+    status_msg = await message.answer(f"⏳ Отправка рассылки {len(users)} пользователям...")
+
+    for uid in users:
+        try:
+            await bot.send_message(uid, message.text, parse_mode=ParseMode.MARKDOWN)
+            success_count += 1
+            await asyncio.sleep(0.05)  # Защита от лимитов Telegram
+        except Exception:
+            fail_count += 1
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="◀️ В админ-панель", callback_data="admin_panel")]]
+    )
+    await status_msg.edit_text(
+        f"✅ **Рассылка завершена!**\n\n"
+        f"Успешно доставлено: **{success_count}**\n"
+        f"Не доставлено: **{fail_count}**",
+        reply_markup=keyboard,
+        parse_mode=ParseMode.MARKDOWN,
+    )
+
+
+# ----- 5. ИЗМЕНЕНИЕ ЦЕН -----
+@dp.callback_query(F.data == "admin_prices")
+async def admin_prices_callback(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS:
+        return
+
+    rub_m = await get_price("rub", "month")
+    rub_f = await get_price("rub", "forever")
+    usd_m = await get_price("usd", "month")
+    usd_f = await get_price("usd", "forever")
+    stars_m = await get_price("stars", "month")
+    stars_f = await get_price("stars", "forever")
+
+    text = (
+        "💰 **Текущие цены:**\n\n"
+        f"• Рубли: {rub_m} ₽ (мес) | {rub_f} ₽ (навсегда)\n"
+        f"• Доллары: ${usd_m} (мес) | ${usd_f} (навсегда)\n"
+        f"• Звёзды: {int(stars_m)} ⭐ (мес) | {int(stars_f)} ⭐ (навсегда)\n\n"
+        f"Выберите параметр для изменения:"
+    )
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="₽ Рубли — Месяц", callback_data="setprice_rub_month"),
+             InlineKeyboardButton(text="₽ Рубли — Навсегда", callback_data="setprice_rub_forever")],
+            [InlineKeyboardButton(text="$ Доллары — Месяц", callback_data="setprice_usd_month"),
+             InlineKeyboardButton(text="$ Доллары — Навсегда", callback_data="setprice_usd_forever")],
+            [InlineKeyboardButton(text="⭐ Звёзды — Месяц", callback_data="setprice_stars_month"),
+             InlineKeyboardButton(text="⭐ Звёзды — Навсегда", callback_data="setprice_stars_forever")],
+            [InlineKeyboardButton(text="◀️ В админ-панель", callback_data="admin_panel")],
+        ]
+    )
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+    await callback.answer()
+
+
+@dp.callback_query(F.data.startswith("setprice_"))
+async def adm_setprice_start(callback: types.CallbackQuery, state: FSMContext):
+    if callback.from_user.id not in ADMIN_IDS:
+        return
+
+    parts = callback.data.split("_")
+    currency = parts[1]
+    period = parts[2]
+
+    await state.update_data(change_currency=currency, change_period=period)
+    await state.set_state(AdminStates.waiting_for_price_value)
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="admin_prices")]]
+    )
+    await callback.message.edit_text(
+        f"💰 **Введите новую цену для `{currency.upper()}` ({period}):**",
+        reply_markup=keyboard,
+        parse_mode=ParseMode.MARKDOWN,
+    )
+    await callback.answer()
+
+
+@dp.message(AdminStates.waiting_for_price_value)
+async def adm_setprice_save(message: types.Message, state: FSMContext):
+    if message.from_user.id not in ADMIN_IDS:
+        return
+
     try:
-        data = json.loads(message.web_app_data.data)
-        action = data.get("action")
-        currency = data.get("currency")  # stars, rub, usd
-        period = data.get("period")  # month, forever
+        new_val = float(message.text.strip().replace(",", "."))
+    except ValueError:
+        await message.answer("❌ Ошибка: введите число!")
+        return
 
-        if action != "buy" or currency not in PRICES or period not in PRICES[currency]:
-            await message.answer("❌ Неверные данные. Попробуйте ещё раз.")
-            return
+    data = await state.get_data()
+    currency = data.get("change_currency")
+    period = data.get("change_period")
+    await state.clear()
 
-        price_info = PRICES[currency][period]
+    await set_setting(f"price_{currency}_{period}", str(new_val))
 
-        if currency == "stars":
-            # Оплата через Telegram Stars
-            await bot.send_invoice(
-                chat_id=message.from_user.id,
-                title="AI Stars — Нейросеть для Brawl Stars",
-                description=price_info["label"],
-                payload=json.dumps({
-                    "user_id": message.from_user.id,
-                    "period": period,
-                    "currency": "XTR",
-                    "amount": price_info["amount"],
-                }),
-                provider_token="",  # Пустой для Telegram Stars
-                currency="XTR",
-                prices=[LabeledPrice(label=price_info["label"], amount=price_info["amount"])],
-            )
-
-        elif currency == "usd":
-            if crypto_pay:
-                try:
-                    invoice = await crypto_pay.create_invoice(
-                        amount=price_info["amount"],
-                        currency_type="fiat",
-                        fiat="USD",
-                        description=f"AI Stars — {price_info['label']}",
-                        payload=json.dumps({"user_id": message.from_user.id, "period": period, "amount": price_info["amount"]}),
-                    )
-                    invoice_id = invoice["invoice_id"]
-                    pay_url = invoice.get("bot_invoice_url") or invoice.get("mini_app_invoice_url") or invoice.get("pay_url")
-
-                    text = (
-                        f"💎 **Оплата через CryptoBot**\n\n"
-                        f"📦 Товар: AI Stars — {price_info['label']}\n"
-                        f"💰 Сумма: **${price_info['amount']}**\n\n"
-                        f"Нажмите кнопку ниже для оплаты через @CryptoBot.\n"
-                        f"После оплаты нажмите кнопку «Проверить оплату»."
-                    )
-
-                    keyboard = InlineKeyboardMarkup(
-                        inline_keyboard=[
-                            [InlineKeyboardButton(text=f"💳 Оплатить ${price_info['amount']} в CryptoBot", url=pay_url)],
-                            [InlineKeyboardButton(text="🔄 Проверить оплату", callback_data=f"check_crypto_{invoice_id}_{period}")],
-                        ]
-                    )
-
-                    await message.answer(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
-                    return
-                except Exception as e:
-                    logger.error(f"CryptoPay invoice error in webapp: {e}")
-
-            await message.answer("❌ Ошибка при создании счета в CryptoBot. Попробуйте позже.")
-
-        elif currency == "rub":
-            # Ручная оплата — создаём ожидающий платёж
-            payment_id = await create_pending_payment(
-                message.from_user.id,
-                price_info["currency"],
-                price_info["amount"],
-                period,
-            )
-
-            currency_symbol = "₽"
-            payment_details = (
-                "💳 **Реквизиты для оплаты:**\n"
-                "• Банк: Сбер / Тинькофф\n"
-                "• Номер карты: `XXXX XXXX XXXX XXXX`\n"
-                "• Или по номеру телефона: `+7 (XXX) XXX-XX-XX`\n\n"
-                "⚠️ **ВАЖНО:** В комментарии к переводу укажите:\n"
-                f"`AI Stars #{payment_id}`"
-            )
-
-            text = (
-                f"🧾 **Заказ #{payment_id}**\n\n"
-                f"📦 Товар: AI Stars — {price_info['label']}\n"
-                f"💰 Сумма: **{price_info['amount']} {currency_symbol}**\n\n"
-                f"{payment_details}\n\n"
-                f"После оплаты администратор проверит платёж и активирует подписку.\n"
-                f"Обычно это занимает до 15 минут ⏱"
-            )
-
-            await message.answer(text, parse_mode=ParseMode.MARKDOWN)
-
-            # Уведомим админов
-            for admin_id in ADMIN_IDS:
-                try:
-                    admin_text = (
-                        f"🔔 **Новый заказ #{payment_id}!**\n\n"
-                        f"👤 Пользователь: @{message.from_user.username or 'N/A'} "
-                        f"(ID: `{message.from_user.id}`)\n"
-                        f"📦 Период: **{period}**\n"
-                        f"💰 Сумма: **{price_info['amount']} {currency_symbol}**\n\n"
-                        f"Для подтверждения:\n"
-                        f"`/confirm {payment_id}`"
-                    )
-                    await bot.send_message(admin_id, admin_text, parse_mode=ParseMode.MARKDOWN)
-                except Exception as e:
-                    logger.error(f"Не удалось отправить уведомление админу {admin_id}: {e}")
-
-    except json.JSONDecodeError:
-        await message.answer("❌ Ошибка обработки данных.")
-    except Exception as e:
-        logger.error(f"Ошибка обработки web_app_data: {e}")
-        await message.answer("❌ Произошла ошибка. Попробуйте позже.")
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[[InlineKeyboardButton(text="◀️ К ценам", callback_data="admin_prices")]]
+    )
+    await message.answer(
+        f"✅ **Цена для {currency.upper()} ({period}) успешно изменена на {new_val}!**",
+        reply_markup=keyboard,
+        parse_mode=ParseMode.MARKDOWN,
+    )
 
 
-# ===== TELEGRAM STARS: PRE-CHECKOUT =====
+# ===== TELEGRAM STARS: PRE-CHECKOUT & SUCCESS =====
 @dp.pre_checkout_query()
 async def pre_checkout(query: PreCheckoutQuery):
-    """Подтверждение оплаты через Telegram Stars."""
     await query.answer(ok=True)
 
 
-# ===== TELEGRAM STARS: УСПЕШНАЯ ОПЛАТА =====
 @dp.message(F.successful_payment)
 async def successful_payment(message: types.Message):
-    """Обработка успешной оплаты через Telegram Stars."""
     payment = message.successful_payment
     try:
         payload = json.loads(payment.invoice_payload)
@@ -676,127 +834,18 @@ async def successful_payment(message: types.Message):
         amount = payload["amount"]
 
         await add_subscription(user_id, period, currency, amount)
+        period_text = "навсегда 🔥" if period == "forever" else "на 1 месяц 📅"
 
-        if period == "forever":
-            period_text = "навсегда 🔥"
-        else:
-            period_text = "на 1 месяц 📅"
-
-        text = (
+        await message.answer(
             f"🎉 **Оплата прошла успешно!**\n\n"
             f"✅ Подписка активирована **{period_text}**\n"
             f"💫 Спасибо за покупку!\n\n"
-            f"Теперь вам доступны все возможности нейросети AI Stars! 🤖"
+            f"Теперь вам доступны все возможности нейросети AI Stars! 🤖",
+            parse_mode=ParseMode.MARKDOWN,
         )
-        await message.answer(text, parse_mode=ParseMode.MARKDOWN)
-
     except Exception as e:
         logger.error(f"Ошибка при обработке платежа: {e}")
-        await message.answer(
-            "❌ Ошибка при активации подписки. Обратитесь в поддержку."
-        )
-
-
-# ===== КОМАНДА /confirm — ПОДТВЕРЖДЕНИЕ ОПЛАТЫ АДМИНОМ =====
-@dp.message(Command("confirm"))
-async def cmd_confirm(message: types.Message):
-    """Подтверждение платежа администратором."""
-    if message.from_user.id not in ADMIN_IDS:
-        await message.answer("⛔ У вас нет прав для этой команды.")
-        return
-
-    args = message.text.split()
-    if len(args) < 2:
-        await message.answer("❌ Использование: `/confirm <payment_id>`", parse_mode=ParseMode.MARKDOWN)
-        return
-
-    try:
-        payment_id = int(args[1])
-    except ValueError:
-        await message.answer("❌ ID платежа должен быть числом.")
-        return
-
-    payment = await confirm_payment(payment_id)
-    if not payment:
-        await message.answer(f"❌ Платёж #{payment_id} не найден или уже подтверждён.")
-        return
-
-    # Уведомим пользователя
-    user_id = payment["user_id"]
-    period = payment["period"]
-    if period == "forever":
-        period_text = "навсегда 🔥"
-    else:
-        period_text = "на 1 месяц 📅"
-
-    try:
-        user_text = (
-            f"🎉 **Оплата подтверждена!**\n\n"
-            f"✅ Подписка активирована **{period_text}**\n"
-            f"💫 Спасибо за покупку!\n\n"
-            f"Теперь вам доступны все возможности нейросети AI Stars! 🤖"
-        )
-        await bot.send_message(user_id, user_text, parse_mode=ParseMode.MARKDOWN)
-    except Exception as e:
-        logger.error(f"Не удалось уведомить пользователя {user_id}: {e}")
-
-    await message.answer(
-        f"✅ Платёж #{payment_id} подтверждён! Подписка пользователя {user_id} активирована."
-    )
-
-
-# ===== КОМАНДА /pending — ОЖИДАЮЩИЕ ПЛАТЕЖИ =====
-@dp.message(Command("pending"))
-async def cmd_pending(message: types.Message):
-    """Список ожидающих платежей (для админов)."""
-    if message.from_user.id not in ADMIN_IDS:
-        await message.answer("⛔ У вас нет прав для этой команды.")
-        return
-
-    payments = await get_pending_payments()
-
-    if not payments:
-        await message.answer("📭 Нет ожидающих платежей.")
-        return
-
-    text = "📋 **Ожидающие платежи:**\n\n"
-    for p in payments:
-        text += (
-            f"**#{p['id']}** — @{p.get('username', 'N/A')} "
-            f"(ID: `{p['user_id']}`)\n"
-            f"   💰 {p['amount']} {p['currency']} | {p['period']}\n"
-            f"   📅 {p['created_at']}\n"
-            f"   → `/confirm {p['id']}`\n\n"
-        )
-
-    await message.answer(text, parse_mode=ParseMode.MARKDOWN)
-
-
-# ===== КОМАНДА /status =====
-@dp.message(Command("status"))
-async def cmd_status(message: types.Message):
-    """Проверка статуса подписки."""
-    sub = await check_subscription(message.from_user.id)
-
-    if sub["active"]:
-        if sub["type"] == "forever":
-            text = "✅ **Подписка активна!**\n🔥 Тип: **Навсегда**\n\nВам доступны все функции нейросети."
-        else:
-            expires = datetime.fromisoformat(sub["expires_at"])
-            days_left = (expires - datetime.now()).days
-            text = (
-                f"✅ **Подписка активна!**\n"
-                f"📅 Тип: **На месяц**\n"
-                f"⏳ Осталось: **{days_left} дней**\n"
-                f"📆 Действует до: **{expires.strftime('%d.%m.%Y')}**"
-            )
-    else:
-        text = (
-            "❌ **Подписка не активна**\n\n"
-            "Используйте /start чтобы открыть магазин."
-        )
-
-    await message.answer(text, parse_mode=ParseMode.MARKDOWN)
+        await message.answer("❌ Ошибка при активации подписки. Обратитесь в поддержку.")
 
 
 # ===== ВЕБ-СЕРВЕР ДЛЯ RENDER И WEB APP =====
@@ -804,7 +853,6 @@ import os
 from aiohttp import web
 
 async def start_web_server():
-    """Запуск встроенного веб-сервера для раздачи Web App и Health Check на Render."""
     port = int(os.getenv("PORT", 8080))
     app = web.Application()
 
@@ -833,8 +881,7 @@ async def main():
     logger.info("🚀 Запуск AI Stars Bot...")
     await init_db()
     logger.info("✅ База данных инициализирована")
-    
-    # Запуск веб-сервера (для Render и раздачи WebApp)
+
     await start_web_server()
     logger.info(f"🔗 WEBAPP_URL: {WEBAPP_URL}")
 

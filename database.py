@@ -38,6 +38,43 @@ async def init_db():
                 FOREIGN KEY (user_id) REFERENCES users(user_id)
             )
         """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS settings (
+                key TEXT PRIMARY KEY,
+                value TEXT
+            )
+        """)
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS support_tickets (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER,
+                username TEXT,
+                message_text TEXT,
+                reply_text TEXT DEFAULT NULL,
+                status TEXT DEFAULT 'open',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                replied_at TEXT DEFAULT NULL
+            )
+        """)
+        # Дефолтный номер карты
+        await db.execute("""
+            INSERT OR IGNORE INTO settings (key, value) VALUES ('card_number', '0000 0000 0000 0000')
+        """)
+        await db.commit()
+
+
+async def get_setting(key: str, default: str = "") -> str:
+    """Получить значение настройки."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("SELECT value FROM settings WHERE key = ?", (key,))
+        row = await cursor.fetchone()
+        return row[0] if row else default
+
+
+async def set_setting(key: str, value: str) -> None:
+    """Установить значение настройки."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        await db.execute("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)", (key, value))
         await db.commit()
 
 
@@ -62,16 +99,21 @@ async def get_or_create_user(user_id: int, username: str = None, first_name: str
         return dict(row)
 
 
+async def get_all_user_ids() -> list:
+    """Получить список всех ID пользователей (для рассылки)."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute("SELECT user_id FROM users")
+        rows = await cursor.fetchall()
+        return [row[0] for row in rows]
+
+
 async def add_subscription(
     user_id: int,
     period: str,
     currency: str,
     amount: float,
 ) -> None:
-    """Активировать подписку пользователю.
-    
-    period: 'month' или 'forever'
-    """
+    """Активировать подписку пользователю."""
     now = datetime.now()
     is_forever = 1 if period == "forever" else 0
     expires_at = None if is_forever else (now + timedelta(days=30)).isoformat()
@@ -101,10 +143,7 @@ async def add_subscription(
 
 
 async def check_subscription(user_id: int) -> dict:
-    """Проверить статус подписки.
-    
-    Returns: dict с ключами 'active', 'type', 'expires_at'
-    """
+    """Проверить статус подписки."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
         db.row_factory = aiosqlite.Row
         cursor = await db.execute("SELECT * FROM users WHERE user_id = ?", (user_id,))
@@ -137,7 +176,7 @@ async def check_subscription(user_id: int) -> dict:
 
 
 async def create_pending_payment(user_id: int, currency: str, amount: float, period: str) -> int:
-    """Создать ожидающий платёж (для ручной проверки RUB/USD)."""
+    """Создать ожидающий платёж (для ручной проверки RUB)."""
     async with aiosqlite.connect(DATABASE_PATH) as db:
         cursor = await db.execute(
             """
@@ -168,13 +207,28 @@ async def confirm_payment(payment_id: int) -> dict | None:
         )
         await db.commit()
 
-        # Активируем подписку
         await add_subscription(
             payment["user_id"],
             payment["period"],
             payment["currency"],
             payment["amount"],
         )
+        return payment
+
+
+async def reject_payment(payment_id: int) -> dict | None:
+    """Отклонить платёж (администратором)."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM payments WHERE id = ? AND status = 'pending'", (payment_id,))
+        payment = await cursor.fetchone()
+
+        if not payment:
+            return None
+
+        payment = dict(payment)
+        await db.execute("UPDATE payments SET status = 'rejected' WHERE id = ?", (payment_id,))
+        await db.commit()
         return payment
 
 
@@ -193,3 +247,46 @@ async def get_pending_payments() -> list:
         )
         rows = await cursor.fetchall()
         return [dict(row) for row in rows]
+
+
+# ===== РАБОТА С ТИКЕТАМИ ПОДДЕРЖКИ =====
+async def create_support_ticket(user_id: int, username: str, message_text: str) -> int:
+    """Создать обращение в поддержку."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        cursor = await db.execute(
+            """
+            INSERT INTO support_tickets (user_id, username, message_text, status)
+            VALUES (?, ?, ?, 'open')
+            """,
+            (user_id, username, message_text),
+        )
+        await db.commit()
+        return cursor.lastrowid
+
+
+async def get_open_tickets() -> list:
+    """Получить все открытые тикеты поддержки."""
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM support_tickets WHERE status = 'open' ORDER BY created_at DESC")
+        rows = await cursor.fetchall()
+        return [dict(row) for row in rows]
+
+
+async def reply_support_ticket(ticket_id: int, reply_text: str) -> dict | None:
+    """Ответить на тикет поддержки."""
+    now = datetime.now()
+    async with aiosqlite.connect(DATABASE_PATH) as db:
+        db.row_factory = aiosqlite.Row
+        cursor = await db.execute("SELECT * FROM support_tickets WHERE id = ? AND status = 'open'", (ticket_id,))
+        row = await cursor.fetchone()
+        if not row:
+            return None
+        ticket = dict(row)
+
+        await db.execute(
+            "UPDATE support_tickets SET reply_text = ?, status = 'closed', replied_at = ? WHERE id = ?",
+            (reply_text, now.isoformat(), ticket_id),
+        )
+        await db.commit()
+        return ticket
