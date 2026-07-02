@@ -1,5 +1,5 @@
 """
-Модуль работы с базой данных SQLite для AI Stars Bot
+Модуль работы с базой данных SQLite для AiStars Bot
 """
 
 import aiosqlite

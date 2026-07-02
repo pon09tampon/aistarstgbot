@@ -1,5 +1,5 @@
 """
-AI Stars Bot — Telegram-бот для продажи подписки с панелью администратора
+AiStars Bot — Telegram-бот для продажи подписки с панелью администратора
 """
 
 import asyncio
@@ -103,8 +103,8 @@ async def process_purchase(message: types.Message, currency: str, period: str):
     if currency == "stars":
         await bot.send_invoice(
             chat_id=user_id,
-            title="AI Stars — Бот для Brawl Stars",
-            description=f"AI Stars — {label} ({int(amount)} ⭐)",
+            title="AiStars — Бот для Brawl Stars",
+            description=f"AiStars — {label} ({int(amount)} ⭐)",
             payload=json.dumps({
                 "user_id": user_id,
                 "period": period,
@@ -123,7 +123,7 @@ async def process_purchase(message: types.Message, currency: str, period: str):
                     amount=amount,
                     currency_type="fiat",
                     fiat="USD",
-                    description=f"AI Stars — {label}",
+                    description=f"AiStars — {label}",
                     payload=json.dumps({"user_id": user_id, "period": period, "amount": amount}),
                 )
                 invoice_id = invoice["invoice_id"]
@@ -131,7 +131,7 @@ async def process_purchase(message: types.Message, currency: str, period: str):
 
                 text = (
                     f"💎 **Оплата через CryptoBot**\n\n"
-                    f"📦 Товар: AI Stars — {label}\n"
+                    f"📦 Товар: AiStars — {label}\n"
                     f"💰 Сумма: **${amount}**\n\n"
                     f"Нажмите кнопку ниже для оплаты через @CryptoBot.\n"
                     f"После оплаты нажмите кнопку «Проверить оплату»."
@@ -159,18 +159,29 @@ async def process_purchase(message: types.Message, currency: str, period: str):
         )
 
         card_number = await get_setting("card_number", "0000 0000 0000 0000")
+        user_tag = f"@{message.from_user.username}" if message.from_user.username else f"ID: {user_id}"
 
         text = (
-            f"🧾 **Заказ #{payment_id}**\n\n"
-            f"📦 Товар: AI Stars — {label}\n"
+            f"📦 Товар: AiStars — {label}\n"
             f"💰 Сумма: **{amount} ₽**\n\n"
             f"💳 **Номер карты:** `{card_number}`\n\n"
-            f"⚠️ **ВАЖНО:** В комментарии к переводу укажите:\n"
-            f"`AI Stars #{payment_id}`\n\n"
-            f"После оплаты администратор проверит платёж и активирует подписку."
+            f"⚠️ **ВАЖНО:** В комментарии к переводу укажите ваш юзернейм в Telegram:\n"
+            f"`{user_tag}`"
         )
 
-        await message.answer(text, parse_mode=ParseMode.MARKDOWN)
+        keyboard = InlineKeyboardMarkup(
+            inline_keyboard=[
+                [InlineKeyboardButton(text="✅ Я ОПЛАТИЛ", callback_data="paid_rub")],
+                [InlineKeyboardButton(text="◀️ Назад", callback_data="shop")],
+            ]
+        )
+
+        await message.answer(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+
+
+@dp.callback_query(F.data == "paid_rub")
+async def paid_rub_callback(callback: types.CallbackQuery):
+    await callback.answer("❌ Перевод не найден", show_alert=True)
 
 
 # ===== КОМАНДА /start =====
@@ -239,7 +250,7 @@ async def cmd_start(message: types.Message, command: CommandObject = None, state
 async def shop_callback(callback: types.CallbackQuery):
     """Магазин через инлайн-кнопки."""
     text = (
-        "🛒 **Магазин AI Stars**\n\n"
+        "🛒 **Магазин AiStars**\n\n"
         "Выберите валюту оплаты:"
     )
     keyboard = InlineKeyboardMarkup(
@@ -399,7 +410,7 @@ async def check_status_callback(callback: types.CallbackQuery):
 async def support_callback(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(UserStates.waiting_for_support_message)
     text = (
-        "💬 **Поддержка AI Stars**\n\n"
+        "💬 **Поддержка AiStars**\n\n"
         "Опишите вашу проблему прямо следующим сообщением в чат.\n\n"
         "Мы ответим в ближайшее время! 🙌"
     )
@@ -450,7 +461,7 @@ async def show_admin_panel(event: types.Message | types.CallbackQuery, state: FS
     card_number = await get_setting("card_number", "Не задана")
 
     text = (
-        "👑 **Панель Администратора AI Stars**\n\n"
+        "👑 **Панель Администратора AiStars**\n\n"
         f"💳 **Текущая карта:** `{card_number}`\n"
         f"📋 **Ожидают подтверждения:** {len(pending_payments)} заказов\n"
         f"💬 **Открытые тикеты:** {len(open_tickets)} шт.\n\n"
@@ -840,7 +851,7 @@ async def successful_payment(message: types.Message):
             f"🎉 **Оплата прошла успешно!**\n\n"
             f"✅ Подписка активирована **{period_text}**\n"
             f"💫 Спасибо за покупку!\n\n"
-            f"Теперь вам доступны все возможности нейросети AI Stars! 🤖",
+            f"Теперь вам доступны все возможности нейросети AiStars! 🤖",
             parse_mode=ParseMode.MARKDOWN,
         )
     except Exception as e:
@@ -860,7 +871,7 @@ async def start_web_server():
         webapp_path = os.path.join(os.path.dirname(__file__), "webapp", "index.html")
         if os.path.exists(webapp_path):
             return web.FileResponse(webapp_path)
-        return web.Response(text="AI Stars Web App is running!")
+        return web.Response(text="AiStars Web App is running!")
 
     app.router.add_get("/", serve_index)
     app.router.add_get("/index.html", serve_index)
@@ -878,7 +889,7 @@ async def start_web_server():
 
 # ===== ЗАПУСК БОТА =====
 async def main():
-    logger.info("🚀 Запуск AI Stars Bot...")
+    logger.info("🚀 Запуск AiStars Bot...")
     await init_db()
     logger.info("✅ База данных инициализирована")
 
