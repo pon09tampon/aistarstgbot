@@ -66,17 +66,11 @@ def is_webapp_configured() -> bool:
 
 
 def get_shop_button():
-    """Кнопка магазина — WebApp или инлайн."""
-    if is_webapp_configured():
-        return InlineKeyboardButton(
-            text="🛒 Открыть магазин",
-            web_app=WebAppInfo(url=WEBAPP_URL),
-        )
-    else:
-        return InlineKeyboardButton(
-            text="🛒 Купить подписку",
-            callback_data="shop",
-        )
+    """Кнопка открытия Web App магазина."""
+    return InlineKeyboardButton(
+        text="🛒 Открыть магазин",
+        web_app=WebAppInfo(url=WEBAPP_URL),
+    )
 
 
 async def get_price(currency: str, period: str) -> float:
@@ -245,77 +239,7 @@ async def cmd_start(message: types.Message, command: CommandObject = None, state
     )
 
 
-# ===== ИНЛАЙН МАГАЗИН =====
-@dp.callback_query(F.data == "shop")
-async def shop_callback(callback: types.CallbackQuery):
-    """Магазин через инлайн-кнопки."""
-    text = (
-        "🛒 **Магазин AiStars**\n\n"
-        "Выберите валюту оплаты:"
-    )
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text="⭐ Звёзды Telegram", callback_data="currency_stars")],
-            [InlineKeyboardButton(text="₽ Рубли", callback_data="currency_rub")],
-            [InlineKeyboardButton(text="$ Доллары", callback_data="currency_usd")],
-            [InlineKeyboardButton(text="◀️ Назад", callback_data="back_start")],
-        ]
-    )
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
-    await callback.answer()
 
-
-@dp.callback_query(F.data.startswith("currency_"))
-async def currency_callback(callback: types.CallbackQuery):
-    """Выбор тарифа после выбора валюты."""
-    currency = callback.data.replace("currency_", "")
-    currency_names = {"stars": "⭐ Звёзды", "rub": "₽ Рубли", "usd": "$ Доллары"}
-
-    p_month = await get_price(currency, "month")
-    p_forever = await get_price(currency, "forever")
-
-    if currency == "stars":
-        month_label = f"{int(p_month)} ⭐"
-        forever_label = f"{int(p_forever)} ⭐"
-    elif currency == "rub":
-        month_label = f"{p_month} ₽"
-        forever_label = f"{p_forever} ₽"
-    else:
-        month_label = f"${p_month}"
-        forever_label = f"${p_forever}"
-
-    text = (
-        f"💎 **Тарифы ({currency_names[currency]})**\n\n"
-        f"📅 **На месяц** — {month_label}\n"
-        f"• Фарм кубков, автопуш 1-2-3 прайм\n"
-        f"• Авто Уклонение + Аимбот 80%\n"
-        f"• Работа 24/7, все режимы\n\n"
-        f"♾️ **Навсегда** — {forever_label}\n"
-        f"• Всё из подписки «На месяц»\n"
-        f"• Приоритетная поддержка 24/7\n"
-        f"• Гайд по окупу + Кфг владельца\n"
-        f"• Ранний доступ к новым функциям"
-    )
-
-    keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[
-            [InlineKeyboardButton(text=f"📅 На месяц — {month_label}", callback_data=f"buy_{currency}_month")],
-            [InlineKeyboardButton(text=f"♾️ Навсегда — {forever_label} 🔥", callback_data=f"buy_{currency}_forever")],
-            [InlineKeyboardButton(text="◀️ Назад", callback_data="shop")],
-        ]
-    )
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
-    await callback.answer()
-
-
-@dp.callback_query(F.data.startswith("buy_"))
-async def buy_callback(callback: types.CallbackQuery):
-    """Обработка покупки через инлайн-кнопки."""
-    parts = callback.data.split("_")
-    currency = parts[1]
-    period = parts[2]
-    await process_purchase(callback.message, currency, period)
-    await callback.answer()
 
 
 @dp.callback_query(F.data == "back_start")
