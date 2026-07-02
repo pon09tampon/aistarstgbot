@@ -413,9 +413,7 @@ async def check_status_callback(callback: types.CallbackQuery):
 async def support_callback(callback: types.CallbackQuery):
     text = (
         "💬 **Поддержка AI Stars**\n\n"
-        "Если у вас есть вопросы:\n"
-        "• Напишите нам: @your_support_username\n"
-        "• Или опишите проблему прямо в этом чате\n\n"
+        "Опишите вашу проблему прямо в этом чате.\n\n"
         "Мы ответим в ближайшее время! 🙌"
     )
     await callback.message.edit_text(text, parse_mode=ParseMode.MARKDOWN)
