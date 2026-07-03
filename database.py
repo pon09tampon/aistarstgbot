@@ -512,3 +512,35 @@ async def reply_support_ticket(ticket_id: int, reply_text: str) -> dict | None:
             )
             await db.commit()
             return ticket
+
+
+async def clear_all_pending_payments() -> int:
+    """Удалить все ожидающие платежи. Возвращает количество удалённых."""
+    if PG_URL:
+        pool = await get_pg_pool()
+        async with pool.acquire() as conn:
+            result = await conn.execute("DELETE FROM payments WHERE status = 'pending'")
+            # asyncpg returns 'DELETE N'
+            return int(result.split()[-1]) if result else 0
+    else:
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            cursor = await db.execute("DELETE FROM payments WHERE status = 'pending'")
+            count = cursor.rowcount
+            await db.commit()
+            return count
+
+
+async def clear_all_open_tickets() -> int:
+    """Удалить все открытые тикеты поддержки. Возвращает количество удалённых."""
+    if PG_URL:
+        pool = await get_pg_pool()
+        async with pool.acquire() as conn:
+            result = await conn.execute("DELETE FROM support_tickets WHERE status = 'open'")
+            return int(result.split()[-1]) if result else 0
+    else:
+        async with aiosqlite.connect(DATABASE_PATH) as db:
+            cursor = await db.execute("DELETE FROM support_tickets WHERE status = 'open'")
+            count = cursor.rowcount
+            await db.commit()
+            return count
+

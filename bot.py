@@ -38,6 +38,8 @@ from database import (
     get_open_tickets,
     reply_support_ticket,
     get_all_user_ids,
+    clear_all_pending_payments,
+    clear_all_open_tickets,
 )
 
 logging.basicConfig(level=logging.INFO)
@@ -440,6 +442,7 @@ async def admin_orders_callback(callback: types.CallbackQuery):
             InlineKeyboardButton(text=f"❌ Отклонить #{p['id']}", callback_data=f"adm_reject_{p['id']}"),
         ])
 
+    buttons.append([InlineKeyboardButton(text="🗑 Очистить все заказы", callback_data="adm_clear_orders_confirm")])
     buttons.append([InlineKeyboardButton(text="◀️ В админ-панель", callback_data="admin_panel")])
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -503,6 +506,37 @@ async def adm_reject_order(callback: types.CallbackQuery):
     await admin_orders_callback(callback)
 
 
+@dp.callback_query(F.data == "adm_clear_orders_confirm")
+async def adm_clear_orders_confirm(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS:
+        return
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Да, очистить", callback_data="adm_clear_orders_yes"),
+                InlineKeyboardButton(text="❌ Отмена", callback_data="admin_orders"),
+            ]
+        ]
+    )
+    await callback.message.edit_text(
+        "⚠️ **Вы уверены?**\n\nВсе ожидающие заказы будут удалены. Это действие нельзя отменить.",
+        reply_markup=keyboard,
+        parse_mode=ParseMode.MARKDOWN,
+    )
+    await callback.answer()
+
+
+@dp.callback_query(F.data == "adm_clear_orders_yes")
+async def adm_clear_orders_yes(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS:
+        return
+
+    count = await clear_all_pending_payments()
+    await callback.answer(f"🗑 Удалено заказов: {count}", show_alert=True)
+    await admin_orders_callback(callback)
+
+
 # ----- 2. ПОДДЕРЖКА В АДМИНКЕ -----
 @dp.callback_query(F.data == "admin_tickets")
 async def admin_tickets_callback(callback: types.CallbackQuery):
@@ -540,6 +574,7 @@ async def admin_tickets_callback(callback: types.CallbackQuery):
         )
         buttons.append([InlineKeyboardButton(text=f"✉️ Ответить на #{t['id']}", callback_data=f"adm_reply_ticket_{t['id']}")])
 
+    buttons.append([InlineKeyboardButton(text="🗑 Очистить все тикеты", callback_data="adm_clear_tickets_confirm")])
     buttons.append([InlineKeyboardButton(text="◀️ В админ-панель", callback_data="admin_panel")])
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
@@ -547,6 +582,37 @@ async def admin_tickets_callback(callback: types.CallbackQuery):
         await callback.message.edit_text(text, reply_markup=keyboard)
     except Exception as e:
         logger.error(f"Ошибка отображения тикетов: {e}")
+
+
+@dp.callback_query(F.data == "adm_clear_tickets_confirm")
+async def adm_clear_tickets_confirm(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS:
+        return
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(text="✅ Да, очистить", callback_data="adm_clear_tickets_yes"),
+                InlineKeyboardButton(text="❌ Отмена", callback_data="admin_tickets"),
+            ]
+        ]
+    )
+    await callback.message.edit_text(
+        "⚠️ **Вы уверены?**\n\nВсе открытые тикеты поддержки будут удалены. Это действие нельзя отменить.",
+        reply_markup=keyboard,
+        parse_mode=ParseMode.MARKDOWN,
+    )
+    await callback.answer()
+
+
+@dp.callback_query(F.data == "adm_clear_tickets_yes")
+async def adm_clear_tickets_yes(callback: types.CallbackQuery):
+    if callback.from_user.id not in ADMIN_IDS:
+        return
+
+    count = await clear_all_open_tickets()
+    await callback.answer(f"🗑 Удалено тикетов: {count}", show_alert=True)
+    await admin_tickets_callback(callback)
 
 
 @dp.callback_query(F.data.startswith("adm_reply_ticket_"))
