@@ -507,32 +507,46 @@ async def adm_reject_order(callback: types.CallbackQuery):
 @dp.callback_query(F.data == "admin_tickets")
 async def admin_tickets_callback(callback: types.CallbackQuery):
     if callback.from_user.id not in ADMIN_IDS:
+        await callback.answer("⛔ Нет доступа.", show_alert=True)
         return
 
-    tickets = await get_open_tickets()
+    # Сразу отвечаем на callback, чтобы убрать спиннер Telegram
+    await callback.answer()
+
+    try:
+        tickets = await get_open_tickets()
+    except Exception as e:
+        logger.error(f"Ошибка получения тикетов: {e}")
+        await callback.message.edit_text("❌ Ошибка загрузки тикетов.")
+        return
+
     if not tickets:
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[[InlineKeyboardButton(text="◀️ В админ-панель", callback_data="admin_panel")]]
         )
         await callback.message.edit_text("📭 Нет открытых обращений в поддержку.", reply_markup=keyboard)
-        await callback.answer()
         return
 
-    text = f"💬 **Открытые обращения ({len(tickets)} шт.):**\n\n"
+    text = f"💬 Открытые обращения ({len(tickets)} шт.):\n\n"
     buttons = []
 
     for t in tickets[:5]:
+        uname = t.get('username') or 'N/A'
+        display_name = f"@{uname}" if uname != 'N/A' else f"ID: {t['user_id']}"
+        msg = str(t.get('message_text', ''))[:100]
         text += (
-            f"**Тикет #{t['id']}** от @{t['username']} (ID: `{t['user_id']}`):\n"
-            f"💬 `{t['message_text']}`\n\n"
+            f"Тикет #{t['id']} от {display_name} (ID: {t['user_id']}):\n"
+            f"💬 {msg}\n\n"
         )
         buttons.append([InlineKeyboardButton(text=f"✉️ Ответить на #{t['id']}", callback_data=f"adm_reply_ticket_{t['id']}")])
 
     buttons.append([InlineKeyboardButton(text="◀️ В админ-панель", callback_data="admin_panel")])
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
-    await callback.answer()
+    try:
+        await callback.message.edit_text(text, reply_markup=keyboard)
+    except Exception as e:
+        logger.error(f"Ошибка отображения тикетов: {e}")
 
 
 @dp.callback_query(F.data.startswith("adm_reply_ticket_"))
@@ -545,7 +559,7 @@ async def adm_start_ticket_reply(callback: types.CallbackQuery, state: FSMContex
     await state.set_state(AdminStates.waiting_for_ticket_reply)
 
     keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="admin_panel")]]
+        inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="admin_tickets")]]
     )
     await callback.message.edit_text(
         f"✉️ **Введите ваш ответ на тикет #{ticket_id}:**",
@@ -565,7 +579,17 @@ async def adm_send_ticket_reply(message: types.Message, state: FSMContext):
     await state.clear()
 
     ticket = await reply_support_ticket(ticket_id, message.text)
+
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [InlineKeyboardButton(text="💬 К тикетам", callback_data="admin_tickets")],
+            [InlineKeyboardButton(text="◀️ В админ-панель", callback_data="admin_panel")],
+        ]
+    )
+
     if ticket:
+        uname = ticket.get('username') or 'N/A'
+        display_name = f"@{uname}" if uname != 'N/A' else f"ID: {ticket['user_id']}"
         try:
             await bot.send_message(
                 ticket["user_id"],
@@ -573,11 +597,20 @@ async def adm_send_ticket_reply(message: types.Message, state: FSMContext):
                 f"{message.text}",
                 parse_mode=ParseMode.MARKDOWN,
             )
-            await message.answer(f"✅ Ответ отправлен пользователю @{ticket['username']}!")
+            await message.answer(
+                f"✅ Ответ отправлен пользователю {display_name}!",
+                reply_markup=keyboard,
+            )
         except Exception as e:
-            await message.answer(f"⚠️ Ответ сохранен, но не удалось доставить пользователю: {e}")
+            await message.answer(
+                f"⚠️ Ответ сохранен, но не удалось доставить пользователю: {e}",
+                reply_markup=keyboard,
+            )
     else:
-        await message.answer("❌ Ошибка: тикет не найден.")
+        await message.answer(
+            "❌ Ошибка: тикет не найден.",
+            reply_markup=keyboard,
+        )
 
 
 # ----- 3. СМЕНА РЕКВИЗИТОВ КАРТЫ -----
