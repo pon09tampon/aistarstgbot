@@ -49,6 +49,11 @@ bot = Bot(token=BOT_TOKEN)
 crypto_pay = CryptoPay(CRYPTO_PAY_TOKEN) if CRYPTO_PAY_TOKEN else None
 dp = Dispatcher(storage=MemoryStorage())
 
+# Кулдауны (user_id -> timestamp последнего действия)
+COOLDOWN_SECONDS = 300  # 5 минут
+_cooldown_orders: dict[int, float] = {}
+_cooldown_support: dict[int, float] = {}
+
 
 # ===== FSM СОСТОЯНИЯ =====
 class AdminStates(StatesGroup):
@@ -148,13 +153,6 @@ async def process_purchase(message: types.Message, currency: str, period: str):
         await message.answer("❌ Ошибка при создании счета в CryptoBot.")
 
     elif currency == "rub":
-        payment_id = await create_pending_payment(
-            user_id,
-            "RUB",
-            amount,
-            period,
-        )
-
         card_number = await get_setting("card_number", "0000 0000 0000 0000")
         user_tag = f"@{message.from_user.username}" if message.from_user.username else f"ID: {user_id}"
 
@@ -168,7 +166,7 @@ async def process_purchase(message: types.Message, currency: str, period: str):
 
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text="✅ Я ОПЛАТИЛ", callback_data="paid_rub")],
+                [InlineKeyboardButton(text="✅ Я ОПЛАТИЛ", callback_data=f"paid_rub_{period}")],
                 [InlineKeyboardButton(text="◀️ Назад", callback_data="back_start")],
             ]
         )
@@ -176,9 +174,57 @@ async def process_purchase(message: types.Message, currency: str, period: str):
         await message.answer(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
 
 
-@dp.callback_query(F.data == "paid_rub")
+@dp.callback_query(F.data.startswith("paid_rub_"))
 async def paid_rub_callback(callback: types.CallbackQuery):
-    await callback.answer("❌ Перевод не найден", show_alert=True)
+    import time
+    user_id = callback.from_user.id
+
+    # Проверка кулдауна (5 минут)
+    now = time.time()
+    last_order = _cooldown_orders.get(user_id, 0)
+    if now - last_order < COOLDOWN_SECONDS:
+        remaining = int(COOLDOWN_SECONDS - (now - last_order))
+        minutes = remaining // 60
+        seconds = remaining % 60
+        await callback.answer(
+            f"⏳ Подождите {minutes} мин {seconds} сек перед повторным заказом.",
+            show_alert=True,
+        )
+        return
+
+    # Извлекаем period из callback_data: paid_rub_month или paid_rub_forever
+    period = callback.data.replace("paid_rub_", "")
+    amount = await get_price("rub", period)
+
+    if not amount:
+        await callback.answer("❌ Ошибка: неверный тариф.", show_alert=True)
+        return
+
+    # Создаём заказ только сейчас
+    payment_id = await create_pending_payment(user_id, "RUB", amount, period)
+    _cooldown_orders[user_id] = now
+
+    period_text = "навсегда" if period == "forever" else "на 1 месяц"
+    await callback.answer(
+        f"✅ Заказ #{payment_id} создан! Ожидайте подтверждения администратором.",
+        show_alert=True,
+    )
+
+    # Уведомляем админов
+    for admin_id in ADMIN_IDS:
+        try:
+            user_tag = f"@{callback.from_user.username}" if callback.from_user.username else f"ID: {user_id}"
+            await bot.send_message(
+                admin_id,
+                f"🔔 **Новый заказ #{payment_id}!**\n\n"
+                f"👤 Пользователь: {user_tag}\n"
+                f"💰 Сумма: {amount} ₽\n"
+                f"📦 Тариф: {period_text}\n\n"
+                f"Перейдите в админ-панель для подтверждения.",
+                parse_mode=ParseMode.MARKDOWN,
+            )
+        except Exception as e:
+            logger.error(f"Не удалось уведомить админа {admin_id}: {e}")
 
 
 # ===== КОМАНДА /start =====
@@ -351,11 +397,28 @@ async def support_callback(callback: types.CallbackQuery, state: FSMContext):
 @dp.message(UserStates.waiting_for_support_message)
 async def handle_user_support_message(message: types.Message, state: FSMContext):
     """Приём сообщения в поддержку от пользователя."""
+    import time
+    user_id = message.from_user.id
+
+    # Проверка кулдауна (5 минут)
+    now = time.time()
+    last_ticket = _cooldown_support.get(user_id, 0)
+    if now - last_ticket < COOLDOWN_SECONDS:
+        remaining = int(COOLDOWN_SECONDS - (now - last_ticket))
+        minutes = remaining // 60
+        seconds = remaining % 60
+        await state.clear()
+        await message.answer(
+            f"⏳ Подождите {minutes} мин {seconds} сек перед повторным обращением.",
+        )
+        return
+
     ticket_id = await create_support_ticket(
-        message.from_user.id,
+        user_id,
         message.from_user.username or "N/A",
         message.text,
     )
+    _cooldown_support[user_id] = now
     await state.clear()
     await message.answer(
         f"✅ **Ваше обращение #{ticket_id} отправлено в поддержку!**\n"
