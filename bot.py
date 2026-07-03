@@ -187,7 +187,7 @@ async def paid_rub_callback(callback: types.CallbackQuery):
         minutes = remaining // 60
         seconds = remaining % 60
         await callback.answer(
-            f"⏳ Подождите {minutes} мин {seconds} сек перед повторным заказом.",
+            f"⏳ Подождите {minutes} мин {seconds} сек перед повторной проверкой.",
             show_alert=True,
         )
         return
@@ -200,31 +200,12 @@ async def paid_rub_callback(callback: types.CallbackQuery):
         await callback.answer("❌ Ошибка: неверный тариф.", show_alert=True)
         return
 
-    # Создаём заказ только сейчас
-    payment_id = await create_pending_payment(user_id, "RUB", amount, period)
+    # Создаём заказ (он отображается в кнопке «Заказы» в админ-панели)
+    await create_pending_payment(user_id, "RUB", amount, period)
     _cooldown_orders[user_id] = now
 
-    period_text = "навсегда" if period == "forever" else "на 1 месяц"
-    await callback.answer(
-        f"✅ Заказ #{payment_id} создан! Ожидайте подтверждения администратором.",
-        show_alert=True,
-    )
-
-    # Уведомляем админов
-    for admin_id in ADMIN_IDS:
-        try:
-            user_tag = f"@{callback.from_user.username}" if callback.from_user.username else f"ID: {user_id}"
-            await bot.send_message(
-                admin_id,
-                f"🔔 **Новый заказ #{payment_id}!**\n\n"
-                f"👤 Пользователь: {user_tag}\n"
-                f"💰 Сумма: {amount} ₽\n"
-                f"📦 Тариф: {period_text}\n\n"
-                f"Перейдите в админ-панель для подтверждения.",
-                parse_mode=ParseMode.MARKDOWN,
-            )
-        except Exception as e:
-            logger.error(f"Не удалось уведомить админа {admin_id}: {e}")
+    # Клиенту показываем сообщение о том, что перевод не найден, без уведомления админов в ЛС
+    await callback.answer("❌ Перевод не найден", show_alert=True)
 
 
 # ===== КОМАНДА /start =====
