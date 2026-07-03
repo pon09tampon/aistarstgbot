@@ -515,32 +515,41 @@ async def reply_support_ticket(ticket_id: int, reply_text: str) -> dict | None:
 
 
 async def clear_all_pending_payments() -> int:
-    """Удалить все ожидающие платежи. Возвращает количество удалённых."""
+    """Удалить все платежи и сбросить нумерацию заказов."""
     if PG_URL:
         pool = await get_pg_pool()
         async with pool.acquire() as conn:
-            result = await conn.execute("DELETE FROM payments WHERE status = 'pending'")
-            # asyncpg returns 'DELETE N'
-            return int(result.split()[-1]) if result else 0
+            count_val = await conn.fetchval("SELECT COUNT(*) FROM payments")
+            await conn.execute("TRUNCATE TABLE payments RESTART IDENTITY")
+            return count_val or 0
     else:
         async with aiosqlite.connect(DATABASE_PATH) as db:
-            cursor = await db.execute("DELETE FROM payments WHERE status = 'pending'")
+            cursor = await db.execute("DELETE FROM payments")
             count = cursor.rowcount
+            try:
+                await db.execute("DELETE FROM sqlite_sequence WHERE name = 'payments'")
+            except Exception:
+                pass
             await db.commit()
             return count
 
 
 async def clear_all_open_tickets() -> int:
-    """Удалить все открытые тикеты поддержки. Возвращает количество удалённых."""
+    """Удалить все тикеты поддержки и сбросить нумерацию."""
     if PG_URL:
         pool = await get_pg_pool()
         async with pool.acquire() as conn:
-            result = await conn.execute("DELETE FROM support_tickets WHERE status = 'open'")
-            return int(result.split()[-1]) if result else 0
+            count_val = await conn.fetchval("SELECT COUNT(*) FROM support_tickets")
+            await conn.execute("TRUNCATE TABLE support_tickets RESTART IDENTITY")
+            return count_val or 0
     else:
         async with aiosqlite.connect(DATABASE_PATH) as db:
-            cursor = await db.execute("DELETE FROM support_tickets WHERE status = 'open'")
+            cursor = await db.execute("DELETE FROM support_tickets")
             count = cursor.rowcount
+            try:
+                await db.execute("DELETE FROM sqlite_sequence WHERE name = 'support_tickets'")
+            except Exception:
+                pass
             await db.commit()
             return count
 
