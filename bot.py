@@ -3,6 +3,7 @@ AiStars Bot — Telegram-бот для продажи подписки с пан
 """
 
 import asyncio
+import html
 import json
 import logging
 from datetime import datetime
@@ -131,9 +132,9 @@ async def process_purchase(message: types.Message, currency: str, period: str):
                 pay_url = invoice.get("bot_invoice_url") or invoice.get("mini_app_invoice_url") or invoice.get("pay_url")
 
                 text = (
-                    f"💎 **Оплата через CryptoBot**\n\n"
+                    f"💎 <b>Оплата через CryptoBot</b>\n\n"
                     f"📦 Товар: AiStars — {label}\n"
-                    f"💰 Сумма: **${amount}**\n\n"
+                    f"💰 Сумма: <b>${amount}</b>\n\n"
                     f"Нажмите кнопку ниже для оплаты через @CryptoBot.\n"
                     f"После оплаты нажмите кнопку «Проверить оплату»."
                 )
@@ -145,7 +146,7 @@ async def process_purchase(message: types.Message, currency: str, period: str):
                         [InlineKeyboardButton(text="◀️ Назад", callback_data="back_start")],
                     ]
                 )
-                await message.answer(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+                await message.answer(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
                 return
             except Exception as e:
                 logger.error(f"CryptoPay error: {e}")
@@ -153,15 +154,15 @@ async def process_purchase(message: types.Message, currency: str, period: str):
         await message.answer("❌ Ошибка при создании счета в CryptoBot.")
 
     elif currency == "rub":
-        card_number = await get_setting("card_number", "0000 0000 0000 0000")
-        user_tag = f"@{message.from_user.username}" if message.from_user.username else f"ID: {user_id}"
+        card_number = html.escape(str(await get_setting("card_number", "0000 0000 0000 0000")))
+        user_tag = f"@{html.escape(message.from_user.username)}" if message.from_user.username else f"ID: {user_id}"
 
         text = (
             f"📦 Товар: AiStars — {label}\n"
-            f"💰 Сумма: **{amount} ₽**\n\n"
-            f"💳 **Номер карты:** `{card_number}`\n\n"
-            f"⚠️ **ВАЖНО:** В комментарии к переводу укажите ваш юзернейм в Telegram:\n"
-            f"`{user_tag}`"
+            f"💰 Сумма: <b>{amount} ₽</b>\n\n"
+            f"💳 <b>Номер карты:</b> <code>{card_number}</code>\n\n"
+            f"⚠️ <b>ВАЖНО:</b> В комментарии к переводу укажите ваш юзернейм в Telegram:\n"
+            f"<code>{user_tag}</code>"
         )
 
         keyboard = InlineKeyboardMarkup(
@@ -171,7 +172,7 @@ async def process_purchase(message: types.Message, currency: str, period: str):
             ]
         )
 
-        await message.answer(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+        await message.answer(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
 
 @dp.callback_query(F.data.startswith("paid_rub_"))
@@ -233,20 +234,21 @@ async def cmd_start(message: types.Message, command: CommandObject = None, state
 
     sub = await check_subscription(message.from_user.id)
 
+    first_name_esc = html.escape(message.from_user.first_name or "Пользователь")
     if sub["active"]:
         status_text = "✅ У вас активная подписка!"
         if sub["type"] == "forever":
-            status_text += "\n🔥 Тип: **Навсегда**"
+            status_text += "\n🔥 Тип: <b>Навсегда</b>"
         else:
             expires = datetime.fromisoformat(sub["expires_at"])
-            status_text += f"\n📅 Действует до: **{expires.strftime('%d.%m.%Y')}**"
+            status_text += f"\n📅 Действует до: <b>{expires.strftime('%d.%m.%Y')}</b>"
     else:
         status_text = "❌ У вас нет активной подписки"
 
     welcome_text = (
-        f"🤖 **Привет, {message.from_user.first_name}!**\n\n"
-        f"Добро пожаловать в бота для покупки подписки **AiStars**!\n\n"
-        f"📊 **Статус подписки:** {status_text}\n\n"
+        f"🤖 <b>Привет, {first_name_esc}!</b>\n\n"
+        f"Добро пожаловать в бота для покупки подписки <b>AiStars</b>!\n\n"
+        f"📊 <b>Статус подписки:</b> {status_text}\n\n"
         f"👇 Нажми кнопку ниже, чтобы купить подписку!"
     )
 
@@ -265,7 +267,7 @@ async def cmd_start(message: types.Message, command: CommandObject = None, state
     await message.answer(
         welcome_text,
         reply_markup=keyboard,
-        parse_mode=ParseMode.MARKDOWN,
+        parse_mode=ParseMode.HTML,
     )
 
 
@@ -305,10 +307,10 @@ async def check_crypto_callback(callback: types.CallbackQuery):
                 
                 period_text = "навсегда 🔥" if period == "forever" else "на 1 месяц 📅"
                 await callback.message.edit_text(
-                    f"🎉 **Оплата прошла успешно!**\n\n"
-                    f"✅ Подписка активирована **{period_text}**\n"
+                    f"🎉 <b>Оплата прошла успешно!</b>\n\n"
+                    f"✅ Подписка активирована <b>{period_text}</b>\n"
                     f"💫 Спасибо за покупку через CryptoBot!",
-                    parse_mode=ParseMode.MARKDOWN
+                    parse_mode=ParseMode.HTML
                 )
                 await callback.answer("✅ Подписка активирована!", show_alert=True)
                 return
@@ -332,19 +334,19 @@ async def check_status_callback(callback: types.CallbackQuery):
 
     if sub["active"]:
         if sub["type"] == "forever":
-            text = "✅ **Подписка активна!**\n🔥 Тип: **Навсегда**\n\nВам доступны все функции нейросети."
+            text = "✅ <b>Подписка активна!</b>\n🔥 Тип: <b>Навсегда</b>\n\nВам доступны все функции нейросети."
         else:
             expires = datetime.fromisoformat(sub["expires_at"])
             days_left = (expires - datetime.now()).days
             text = (
-                f"✅ **Подписка активна!**\n"
-                f"📅 Тип: **На месяц**\n"
-                f"⏳ Осталось: **{days_left} дней**\n"
-                f"📆 Действует до: **{expires.strftime('%d.%m.%Y')}**"
+                f"✅ <b>Подписка активна!</b>\n"
+                f"📅 Тип: <b>На месяц</b>\n"
+                f"⏳ Осталось: <b>{days_left} дней</b>\n"
+                f"📆 Действует до: <b>{expires.strftime('%d.%m.%Y')}</b>"
             )
     else:
         text = (
-            "❌ **Подписка не активна**\n\n"
+            "❌ <b>Подписка не активна</b>\n\n"
             "Нажмите кнопку ниже, чтобы приобрести доступ!"
         )
 
@@ -355,7 +357,7 @@ async def check_status_callback(callback: types.CallbackQuery):
         ]
     )
 
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
     await callback.answer()
 
 
@@ -364,14 +366,14 @@ async def check_status_callback(callback: types.CallbackQuery):
 async def support_callback(callback: types.CallbackQuery, state: FSMContext):
     await state.set_state(UserStates.waiting_for_support_message)
     text = (
-        "💬 **Поддержка AiStars**\n\n"
+        "💬 <b>Поддержка AiStars</b>\n\n"
         "Опишите вашу проблему прямо следующим сообщением в чат.\n\n"
         "Мы ответим в ближайшее время! 🙌"
     )
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="back_start")]]
     )
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
     await callback.answer()
 
 
@@ -402,9 +404,9 @@ async def handle_user_support_message(message: types.Message, state: FSMContext)
     _cooldown_support[user_id] = now
     await state.clear()
     await message.answer(
-        f"✅ **Ваше обращение #{ticket_id} отправлено в поддержку!**\n"
+        f"✅ <b>Ваше обращение #{ticket_id} отправлено в поддержку!</b>\n"
         f"Ожидайте ответа от администратора.",
-        parse_mode=ParseMode.MARKDOWN,
+        parse_mode=ParseMode.HTML,
     )
 
 
@@ -429,13 +431,13 @@ async def show_admin_panel(event: types.Message | types.CallbackQuery, state: FS
 
     pending_payments = await get_pending_payments()
     open_tickets = await get_open_tickets()
-    card_number = await get_setting("card_number", "Не задана")
+    card_number = html.escape(str(await get_setting("card_number", "Не задана")))
 
     text = (
-        "👑 **Панель Администратора AiStars**\n\n"
-        f"💳 **Текущая карта:** `{card_number}`\n"
-        f"📋 **Ожидают подтверждения:** {len(pending_payments)} заказов\n"
-        f"💬 **Открытые тикеты:** {len(open_tickets)} шт.\n\n"
+        "👑 <b>Панель Администратора AiStars</b>\n\n"
+        f"💳 <b>Текущая карта:</b> <code>{card_number}</code>\n"
+        f"📋 <b>Ожидают подтверждения:</b> {len(pending_payments)} заказов\n"
+        f"💬 <b>Открытые тикеты:</b> {len(open_tickets)} шт.\n\n"
         f"Выберите раздел:"
     )
 
@@ -451,10 +453,10 @@ async def show_admin_panel(event: types.Message | types.CallbackQuery, state: FS
     )
 
     if isinstance(event, types.CallbackQuery):
-        await event.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+        await event.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
         await event.answer()
     else:
-        await event.answer(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+        await event.answer(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
 
 # ----- 1. ЗАКАЗЫ (ПОДТВЕРЖДЕНИЕ / ОТКЛОНЕНИЕ) -----
@@ -473,12 +475,14 @@ async def admin_orders_callback(callback: types.CallbackQuery):
         await callback.answer()
         return
 
-    text = f"📋 **Ожидающие заказы ({len(payments)} шт.):**\n\n"
+    text = f"📋 <b>Ожидающие заказы ({len(payments)} шт.):</b>\n\n"
     buttons = []
 
     for p in payments[:10]:
+        raw_uname = p.get('username')
+        uname_str = f"@{html.escape(raw_uname)}" if raw_uname else "N/A"
         text += (
-            f"**Заказ #{p['id']}** | @{p.get('username', 'N/A')} (ID: `{p['user_id']}`)\n"
+            f"<b>Заказ #{p['id']}</b> | {uname_str} (ID: <code>{p['user_id']}</code>)\n"
             f"💰 Сумма: {p['amount']} {p['currency']} | Тариф: {p['period']}\n\n"
         )
         buttons.append([
@@ -490,7 +494,7 @@ async def admin_orders_callback(callback: types.CallbackQuery):
     buttons.append([InlineKeyboardButton(text="◀️ В админ-панель", callback_data="admin_panel")])
     keyboard = InlineKeyboardMarkup(inline_keyboard=buttons)
 
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
     await callback.answer()
 
 
@@ -508,10 +512,10 @@ async def adm_confirm_order(callback: types.CallbackQuery):
         try:
             await bot.send_message(
                 user_id,
-                f"🎉 **Оплата подтверждена!**\n\n"
-                f"✅ Подписка активирована **{period_text}**\n"
+                f"🎉 <b>Оплата подтверждена!</b>\n\n"
+                f"✅ Подписка активирована <b>{period_text}</b>\n"
                 f"💫 Спасибо за покупку!",
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=ParseMode.HTML,
             )
         except Exception as e:
             logger.error(f"Не удалось отправить сообщение пользователю {user_id}: {e}")
@@ -536,9 +540,9 @@ async def adm_reject_order(callback: types.CallbackQuery):
         try:
             await bot.send_message(
                 user_id,
-                f"❌ **Ваш заказ #{payment_id} был отклонён администратором.**\n\n"
+                f"❌ <b>Ваш заказ #{payment_id} был отклонён администратором.</b>\n\n"
                 f"Если произошла ошибка — напишите в поддержку.",
-                parse_mode=ParseMode.MARKDOWN,
+                parse_mode=ParseMode.HTML,
             )
         except Exception as e:
             logger.error(f"Не удалось уведомить пользователя {user_id}: {e}")
@@ -564,9 +568,9 @@ async def adm_clear_orders_confirm(callback: types.CallbackQuery):
         ]
     )
     await callback.message.edit_text(
-        "⚠️ **Вы уверены?**\n\nВсе ожидающие заказы будут удалены. Это действие нельзя отменить.",
+        "⚠️ <b>Вы уверены?</b>\n\nВсе ожидающие заказы будут удалены. Это действие нельзя отменить.",
         reply_markup=keyboard,
-        parse_mode=ParseMode.MARKDOWN,
+        parse_mode=ParseMode.HTML,
     )
     await callback.answer()
 
@@ -642,9 +646,9 @@ async def adm_clear_tickets_confirm(callback: types.CallbackQuery):
         ]
     )
     await callback.message.edit_text(
-        "⚠️ **Вы уверены?**\n\nВсе открытые тикеты поддержки будут удалены. Это действие нельзя отменить.",
+        "⚠️ <b>Вы уверены?</b>\n\nВсе открытые тикеты поддержки будут удалены. Это действие нельзя отменить.",
         reply_markup=keyboard,
-        parse_mode=ParseMode.MARKDOWN,
+        parse_mode=ParseMode.HTML,
     )
     await callback.answer()
 
@@ -672,9 +676,9 @@ async def adm_start_ticket_reply(callback: types.CallbackQuery, state: FSMContex
         inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="admin_tickets")]]
     )
     await callback.message.edit_text(
-        f"✉️ **Введите ваш ответ на тикет #{ticket_id}:**",
+        f"✉️ <b>Введите ваш ответ на тикет #{ticket_id}:</b>",
         reply_markup=keyboard,
-        parse_mode=ParseMode.MARKDOWN,
+        parse_mode=ParseMode.HTML,
     )
     await callback.answer()
 
@@ -699,13 +703,13 @@ async def adm_send_ticket_reply(message: types.Message, state: FSMContext):
 
     if ticket:
         uname = ticket.get('username') or 'N/A'
-        display_name = f"@{uname}" if uname != 'N/A' else f"ID: {ticket['user_id']}"
+        display_name = f"@{html.escape(uname)}" if uname != 'N/A' else f"ID: {ticket['user_id']}"
         try:
             await bot.send_message(
                 ticket["user_id"],
-                f"💬 **Ответ от поддержки (по обращению #{ticket_id}):**\n\n"
-                f"{message.text}",
-                parse_mode=ParseMode.MARKDOWN,
+                f"💬 <b>Ответ от поддержки (по обращению #{ticket_id}):</b>\n\n"
+                f"{html.escape(message.text)}",
+                parse_mode=ParseMode.HTML,
             )
             await message.answer(
                 f"✅ Ответ отправлен пользователю {display_name}!",
@@ -729,18 +733,18 @@ async def admin_change_card_callback(callback: types.CallbackQuery, state: FSMCo
     if callback.from_user.id not in ADMIN_IDS:
         return
 
-    card_number = await get_setting("card_number", "Не задана")
+    card_number = html.escape(str(await get_setting("card_number", "Не задана")))
     await state.set_state(AdminStates.waiting_for_card)
 
     text = (
-        f"💳 **Смена реквизитов карты**\n\n"
-        f"Текущая карта: `{card_number}`\n\n"
+        f"💳 <b>Смена реквизитов карты</b>\n\n"
+        f"Текущая карта: <code>{card_number}</code>\n\n"
         f"Введите новый номер карты в ответ на это сообщение:"
     )
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="admin_panel")]]
     )
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
     await callback.answer()
 
 
@@ -756,7 +760,8 @@ async def process_new_card(message: types.Message, state: FSMContext):
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text="◀️ В админ-панель", callback_data="admin_panel")]]
     )
-    await message.answer(f"✅ **Номер карты успешно обновлён!**\nНовая карта: `{new_card}`", reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+    card_esc = html.escape(new_card)
+    await message.answer(f"✅ <b>Номер карты успешно обновлён!</b>\nНовая карта: <code>{card_esc}</code>", reply_markup=keyboard, parse_mode=ParseMode.HTML)
 
 
 # ----- 4. РАССЫЛКА -----
@@ -767,13 +772,13 @@ async def admin_broadcast_callback(callback: types.CallbackQuery, state: FSMCont
 
     await state.set_state(AdminStates.waiting_for_broadcast)
     text = (
-        "📢 **Рассылка сообщений**\n\n"
-        "Введите текст сообщения, которое будет отправлено **ВСЕМ** пользователям бота:"
+        "📢 <b>Рассылка сообщений</b>\n\n"
+        "Введите текст сообщения, которое будет отправлено <b>ВСЕМ</b> пользователям бота:"
     )
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="admin_panel")]]
     )
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
     await callback.answer()
 
 
@@ -791,21 +796,26 @@ async def process_broadcast(message: types.Message, state: FSMContext):
 
     for uid in users:
         try:
-            await bot.send_message(uid, message.text, parse_mode=ParseMode.MARKDOWN)
+            await bot.send_message(uid, message.text, parse_mode=ParseMode.HTML)
             success_count += 1
-            await asyncio.sleep(0.05)  # Защита от лимитов Telegram
+            await asyncio.sleep(0.05)
         except Exception:
-            fail_count += 1
+            try:
+                await bot.send_message(uid, message.text)
+                success_count += 1
+                await asyncio.sleep(0.05)
+            except Exception:
+                fail_count += 1
 
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[[InlineKeyboardButton(text="◀️ В админ-панель", callback_data="admin_panel")]]
     )
     await status_msg.edit_text(
-        f"✅ **Рассылка завершена!**\n\n"
-        f"Успешно доставлено: **{success_count}**\n"
-        f"Не доставлено: **{fail_count}**",
+        f"✅ <b>Рассылка завершена!</b>\n\n"
+        f"Успешно доставлено: <b>{success_count}</b>\n"
+        f"Не доставлено: <b>{fail_count}</b>",
         reply_markup=keyboard,
-        parse_mode=ParseMode.MARKDOWN,
+        parse_mode=ParseMode.HTML,
     )
 
 
@@ -823,7 +833,7 @@ async def admin_prices_callback(callback: types.CallbackQuery):
     stars_f = await get_price("stars", "forever")
 
     text = (
-        "💰 **Текущие цены:**\n\n"
+        "💰 <b>Текущие цены:</b>\n\n"
         f"• Рубли: {rub_m} ₽ (мес) | {rub_f} ₽ (навсегда)\n"
         f"• Доллары: ${usd_m} (мес) | ${usd_f} (навсегда)\n"
         f"• Звёзды: {int(stars_m)} ⭐ (мес) | {int(stars_f)} ⭐ (навсегда)\n\n"
@@ -841,7 +851,7 @@ async def admin_prices_callback(callback: types.CallbackQuery):
             [InlineKeyboardButton(text="◀️ В админ-панель", callback_data="admin_panel")],
         ]
     )
-    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN)
+    await callback.message.edit_text(text, reply_markup=keyboard, parse_mode=ParseMode.HTML)
     await callback.answer()
 
 
@@ -861,9 +871,9 @@ async def adm_setprice_start(callback: types.CallbackQuery, state: FSMContext):
         inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="admin_prices")]]
     )
     await callback.message.edit_text(
-        f"💰 **Введите новую цену для `{currency.upper()}` ({period}):**",
+        f"💰 <b>Введите новую цену для <code>{currency.upper()}</code> ({period}):</b>",
         reply_markup=keyboard,
-        parse_mode=ParseMode.MARKDOWN,
+        parse_mode=ParseMode.HTML,
     )
     await callback.answer()
 
@@ -890,9 +900,9 @@ async def adm_setprice_save(message: types.Message, state: FSMContext):
         inline_keyboard=[[InlineKeyboardButton(text="◀️ К ценам", callback_data="admin_prices")]]
     )
     await message.answer(
-        f"✅ **Цена для {currency.upper()} ({period}) успешно изменена на {new_val}!**",
+        f"✅ <b>Цена для {currency.upper()} ({period}) успешно изменена на {new_val}!</b>",
         reply_markup=keyboard,
-        parse_mode=ParseMode.MARKDOWN,
+        parse_mode=ParseMode.HTML,
     )
 
 
@@ -916,11 +926,11 @@ async def successful_payment(message: types.Message):
         period_text = "навсегда 🔥" if period == "forever" else "на 1 месяц 📅"
 
         await message.answer(
-            f"🎉 **Оплата прошла успешно!**\n\n"
-            f"✅ Подписка активирована **{period_text}**\n"
+            f"🎉 <b>Оплата прошла успешно!</b>\n\n"
+            f"✅ Подписка активирована <b>{period_text}</b>\n"
             f"💫 Спасибо за покупку!\n\n"
             f"Теперь вам доступны все возможности нейросети AiStars! 🤖",
-            parse_mode=ParseMode.MARKDOWN,
+            parse_mode=ParseMode.HTML,
         )
     except Exception as e:
         logger.error(f"Ошибка при обработке платежа: {e}")
