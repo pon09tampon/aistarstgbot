@@ -41,9 +41,24 @@ async def init_db():
                     activated_at TEXT DEFAULT NULL,
                     expires_at TEXT DEFAULT NULL,
                     is_forever INTEGER DEFAULT 0,
+                    vpn_subscription_type TEXT DEFAULT NULL,
+                    vpn_activated_at TEXT DEFAULT NULL,
+                    vpn_expires_at TEXT DEFAULT NULL,
+                    vpn_is_forever INTEGER DEFAULT 0,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            # Upgrade existing schema if needed
+            for col, col_type in [
+                ("vpn_subscription_type", "TEXT DEFAULT NULL"),
+                ("vpn_activated_at", "TEXT DEFAULT NULL"),
+                ("vpn_expires_at", "TEXT DEFAULT NULL"),
+                ("vpn_is_forever", "INTEGER DEFAULT 0"),
+            ]:
+                try:
+                    await conn.execute(f"ALTER TABLE users ADD COLUMN IF NOT EXISTS {col} {col_type}")
+                except Exception:
+                    pass
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS payments (
                     id SERIAL PRIMARY KEY,
@@ -52,11 +67,16 @@ async def init_db():
                     currency TEXT,
                     amount DOUBLE PRECISION,
                     period TEXT,
+                    product TEXT DEFAULT 'aistars',
                     status TEXT DEFAULT 'pending',
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     confirmed_at TEXT DEFAULT NULL
                 )
             """)
+            try:
+                await conn.execute("ALTER TABLE payments ADD COLUMN IF NOT EXISTS product TEXT DEFAULT 'aistars'")
+            except Exception:
+                pass
             await conn.execute("""
                 CREATE TABLE IF NOT EXISTS settings (
                     key TEXT PRIMARY KEY,
@@ -93,9 +113,24 @@ async def init_db():
                     activated_at TEXT DEFAULT NULL,
                     expires_at TEXT DEFAULT NULL,
                     is_forever INTEGER DEFAULT 0,
+                    vpn_subscription_type TEXT DEFAULT NULL,
+                    vpn_activated_at TEXT DEFAULT NULL,
+                    vpn_expires_at TEXT DEFAULT NULL,
+                    vpn_is_forever INTEGER DEFAULT 0,
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP
                 )
             """)
+            # Upgrade existing sqlite schema if needed
+            for col, col_type in [
+                ("vpn_subscription_type", "TEXT DEFAULT NULL"),
+                ("vpn_activated_at", "TEXT DEFAULT NULL"),
+                ("vpn_expires_at", "TEXT DEFAULT NULL"),
+                ("vpn_is_forever", "INTEGER DEFAULT 0"),
+            ]:
+                try:
+                    await db.execute(f"ALTER TABLE users ADD COLUMN {col} {col_type}")
+                except Exception:
+                    pass
             await db.execute("""
                 CREATE TABLE IF NOT EXISTS payments (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -104,12 +139,17 @@ async def init_db():
                     currency TEXT,
                     amount REAL,
                     period TEXT,
+                    product TEXT DEFAULT 'aistars',
                     status TEXT DEFAULT 'pending',
                     created_at TEXT DEFAULT CURRENT_TIMESTAMP,
                     confirmed_at TEXT DEFAULT NULL,
                     FOREIGN KEY (user_id) REFERENCES users(user_id)
                 )
             """)
+            try:
+                await db.execute("ALTER TABLE payments ADD COLUMN product TEXT DEFAULT 'aistars'")
+            except Exception:
+                pass
             await db.execute("""
                 CREATE TABLE IF NOT EXISTS settings (
                     key TEXT PRIMARY KEY,
@@ -217,61 +257,93 @@ async def add_subscription(
     period: str,
     currency: str,
     amount: float,
+    product: str = "aistars",
 ) -> None:
     """Активировать подписку пользователю."""
     now = datetime.now()
     is_forever = 1 if period == "forever" else 0
-    expires_at = None if is_forever else (now + timedelta(days=30)).isoformat()
+    days = 90 if period == "3month" else 30
+    expires_at = None if is_forever else (now + timedelta(days=days)).isoformat()
 
     if PG_URL:
         pool = await get_pg_pool()
         async with pool.acquire() as conn:
+            if product == "vpn":
+                await conn.execute(
+                    """
+                    UPDATE users SET
+                        vpn_subscription_type = $1,
+                        payment_currency = $2,
+                        payment_amount = $3,
+                        vpn_activated_at = $4,
+                        vpn_expires_at = $5,
+                        vpn_is_forever = $6
+                    WHERE user_id = $7
+                    """,
+                    period, currency, amount, now.isoformat(), expires_at, is_forever, user_id,
+                )
+            else:
+                await conn.execute(
+                    """
+                    UPDATE users SET
+                        subscription_type = $1,
+                        payment_currency = $2,
+                        payment_amount = $3,
+                        activated_at = $4,
+                        expires_at = $5,
+                        is_forever = $6
+                    WHERE user_id = $7
+                    """,
+                    period, currency, amount, now.isoformat(), expires_at, is_forever, user_id,
+                )
             await conn.execute(
                 """
-                UPDATE users SET
-                    subscription_type = $1,
-                    payment_currency = $2,
-                    payment_amount = $3,
-                    activated_at = $4,
-                    expires_at = $5,
-                    is_forever = $6
-                WHERE user_id = $7
+                INSERT INTO payments (user_id, payment_type, currency, amount, period, product, status, confirmed_at)
+                VALUES ($1, $2, $3, $4, $5, $6, 'confirmed', $7)
                 """,
-                period, currency, amount, now.isoformat(), expires_at, is_forever, user_id,
-            )
-            await conn.execute(
-                """
-                INSERT INTO payments (user_id, payment_type, currency, amount, period, status, confirmed_at)
-                VALUES ($1, $2, $3, $4, $5, 'confirmed', $6)
-                """,
-                user_id, "payment", currency, amount, period, now.isoformat(),
+                user_id, "payment", currency, amount, period, product, now.isoformat(),
             )
     else:
         async with aiosqlite.connect(DATABASE_PATH) as db:
+            if product == "vpn":
+                await db.execute(
+                    """
+                    UPDATE users SET
+                        vpn_subscription_type = ?,
+                        payment_currency = ?,
+                        payment_amount = ?,
+                        vpn_activated_at = ?,
+                        vpn_expires_at = ?,
+                        vpn_is_forever = ?
+                    WHERE user_id = ?
+                    """,
+                    (period, currency, amount, now.isoformat(), expires_at, is_forever, user_id),
+                )
+            else:
+                await db.execute(
+                    """
+                    UPDATE users SET
+                        subscription_type = ?,
+                        payment_currency = ?,
+                        payment_amount = ?,
+                        activated_at = ?,
+                        expires_at = ?,
+                        is_forever = ?
+                    WHERE user_id = ?
+                    """,
+                    (period, currency, amount, now.isoformat(), expires_at, is_forever, user_id),
+                )
             await db.execute(
                 """
-                UPDATE users SET
-                    subscription_type = ?,
-                    payment_currency = ?,
-                    payment_amount = ?,
-                    activated_at = ?,
-                    expires_at = ?,
-                    is_forever = ?
-                WHERE user_id = ?
+                INSERT INTO payments (user_id, payment_type, currency, amount, period, product, status, confirmed_at)
+                VALUES (?, ?, ?, ?, ?, ?, 'confirmed', ?)
                 """,
-                (period, currency, amount, now.isoformat(), expires_at, is_forever, user_id),
-            )
-            await db.execute(
-                """
-                INSERT INTO payments (user_id, payment_type, currency, amount, period, status, confirmed_at)
-                VALUES (?, ?, ?, ?, ?, 'confirmed', ?)
-                """,
-                (user_id, "payment", currency, amount, period, now.isoformat()),
+                (user_id, "payment", currency, amount, period, product, now.isoformat()),
             )
             await db.commit()
 
 
-async def check_subscription(user_id: int) -> dict:
+async def check_subscription(user_id: int, product: str = "aistars") -> dict:
     """Проверить статус подписки."""
     if PG_URL:
         pool = await get_pg_pool()
@@ -289,7 +361,16 @@ async def check_subscription(user_id: int) -> dict:
                 return {"active": False, "type": None, "expires_at": None}
             user = dict(row)
 
-    if user["is_forever"]:
+    if product == "vpn":
+        is_forever = user.get("vpn_is_forever", 0)
+        expires_at = user.get("vpn_expires_at")
+        sub_type = user.get("vpn_subscription_type")
+    else:
+        is_forever = user.get("is_forever", 0)
+        expires_at = user.get("expires_at")
+        sub_type = user.get("subscription_type")
+
+    if is_forever:
         return {
             "active": True,
             "type": "forever",
@@ -297,41 +378,41 @@ async def check_subscription(user_id: int) -> dict:
             "currency": user["payment_currency"],
         }
 
-    if user["expires_at"]:
-        expires = datetime.fromisoformat(user["expires_at"])
+    if expires_at:
+        expires = datetime.fromisoformat(expires_at)
         if expires > datetime.now():
             return {
                 "active": True,
-                "type": "month",
-                "expires_at": user["expires_at"],
+                "type": sub_type or "month",
+                "expires_at": expires_at,
                 "currency": user["payment_currency"],
             }
 
     return {"active": False, "type": None, "expires_at": None}
 
 
-async def create_pending_payment(user_id: int, currency: str, amount: float, period: str) -> int:
+async def create_pending_payment(user_id: int, currency: str, amount: float, period: str, product: str = "aistars") -> int:
     """Создать ожидающий платёж."""
     if PG_URL:
         pool = await get_pg_pool()
         async with pool.acquire() as conn:
             val = await conn.fetchval(
                 """
-                INSERT INTO payments (user_id, payment_type, currency, amount, period, status)
-                VALUES ($1, 'manual', $2, $3, $4, 'pending')
+                INSERT INTO payments (user_id, payment_type, currency, amount, period, product, status)
+                VALUES ($1, 'manual', $2, $3, $4, $5, 'pending')
                 RETURNING id
                 """,
-                user_id, currency, amount, period,
+                user_id, currency, amount, period, product,
             )
             return val
     else:
         async with aiosqlite.connect(DATABASE_PATH) as db:
             cursor = await db.execute(
                 """
-                INSERT INTO payments (user_id, payment_type, currency, amount, period, status)
-                VALUES (?, 'manual', ?, ?, ?, 'pending')
+                INSERT INTO payments (user_id, payment_type, currency, amount, period, product, status)
+                VALUES (?, 'manual', ?, ?, ?, ?, 'pending')
                 """,
-                (user_id, currency, amount, period),
+                (user_id, currency, amount, period, product),
             )
             await db.commit()
             return cursor.lastrowid
@@ -356,6 +437,7 @@ async def confirm_payment(payment_id: int) -> dict | None:
                 payment["period"],
                 payment["currency"],
                 payment["amount"],
+                payment.get("product", "aistars"),
             )
             return payment
     else:
@@ -379,6 +461,7 @@ async def confirm_payment(payment_id: int) -> dict | None:
                 payment["period"],
                 payment["currency"],
                 payment["amount"],
+                payment.get("product", "aistars"),
             )
             return payment
 

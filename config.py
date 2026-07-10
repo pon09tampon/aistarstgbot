@@ -25,40 +25,95 @@ DATABASE_URL = os.getenv("DATABASE_URL")
 
 # ===== ТАРИФЫ =====
 PRICES = {
-    "stars": {
-        "month": {
-            "amount": 200,
-            "label": "Подписка на месяц (200 ⭐)",
-            "currency": "XTR",
+    "aistars": {
+        "stars": {
+            "month": {
+                "amount": 200,
+                "label": "Подписка на месяц (200 ⭐)",
+                "currency": "XTR",
+            },
+            "forever": {
+                "amount": 650,
+                "label": "Навсегда (650 ⭐)",
+                "currency": "XTR",
+            },
         },
-        "forever": {
-            "amount": 650,
-            "label": "Навсегда (650 ⭐)",
-            "currency": "XTR",
+        "rub": {
+            "month": {
+                "amount": 250,
+                "label": "Подписка на месяц (250 ₽)",
+                "currency": "RUB",
+            },
+            "forever": {
+                "amount": 800,
+                "label": "Навсегда (800 ₽)",
+                "currency": "RUB",
+            },
+        },
+        "usd": {
+            "month": {
+                "amount": 3,
+                "label": "Подписка на месяц ($3)",
+                "currency": "USD",
+            },
+            "forever": {
+                "amount": 10,
+                "label": "Навсегда ($10)",
+                "currency": "USD",
+            },
         },
     },
-    "rub": {
-        "month": {
-            "amount": 250,
-            "label": "Подписка на месяц (250 ₽)",
-            "currency": "RUB",
+    "vpn": {
+        "stars": {
+            "month": {
+                "amount": 70,
+                "label": "VPN на месяц (70 ⭐)",
+                "currency": "XTR",
+            },
+            "3month": {
+                "amount": 200,
+                "label": "VPN на 3 месяца (200 ⭐)",
+                "currency": "XTR",
+            },
+            "forever": {
+                "amount": 750,
+                "label": "VPN навсегда (750 ⭐)",
+                "currency": "XTR",
+            },
         },
-        "forever": {
-            "amount": 800,
-            "label": "Навсегда (800 ₽)",
-            "currency": "RUB",
+        "rub": {
+            "month": {
+                "amount": 100,
+                "label": "VPN на месяц (100 ₽)",
+                "currency": "RUB",
+            },
+            "3month": {
+                "amount": 250,
+                "label": "VPN на 3 месяца (250 ₽)",
+                "currency": "RUB",
+            },
+            "forever": {
+                "amount": 900,
+                "label": "VPN навсегда (900 ₽)",
+                "currency": "RUB",
+            },
         },
-    },
-    "usd": {
-        "month": {
-            "amount": 3,
-            "label": "Подписка на месяц ($3)",
-            "currency": "USD",
+        "usd": {
+            "month": {
+                "amount": 1,
+                "label": "VPN на месяц ($1)",
+                "currency": "USD",
+            },
+            "3month": {
+                "amount": 3,
+                "label": "VPN на 3 месяца ($3)",
+                "currency": "USD",
+            },
+            "forever": {
+                "amount": 12,
+                "label": "VPN навсегда ($12)",
+                "currency": "USD",
+            },
         },
-        "forever": {
-            "amount": 10,
-            "label": "Навсегда ($10)",
-            "currency": "USD",
-        },
-    },
+    }
 }

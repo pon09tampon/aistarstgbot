@@ -81,35 +81,41 @@ def get_shop_button():
     )
 
 
-async def get_price(currency: str, period: str) -> float:
+async def get_price(currency: str, period: str, product: str = "aistars") -> float:
     """Динамическое получение цены с учётом настроек в БД."""
-    custom_price = await get_setting(f"price_{currency}_{period}")
+    custom_price = await get_setting(f"price_{product}_{currency}_{period}")
     if custom_price:
         try:
             return float(custom_price)
         except ValueError:
             pass
-    return PRICES.get(currency, {}).get(period, {}).get("amount", 0)
+    return PRICES.get(product, {}).get(currency, {}).get(period, {}).get("amount", 0)
 
 
-async def process_purchase(message: types.Message, currency: str, period: str):
+async def process_purchase(message: types.Message, currency: str, period: str, product: str = "aistars"):
     """Общий обработчик создания платежей."""
-    if currency not in PRICES or period not in PRICES[currency]:
+    if product not in PRICES or currency not in PRICES[product] or period not in PRICES[product][currency]:
         await message.answer("❌ Неверные данные тарифа.")
         return
 
-    amount = await get_price(currency, period)
+    amount = await get_price(currency, period, product)
     user_id = message.from_user.id
-    label = f"Подписка ({period})"
+    
+    prod_label = "VPN" if product == "vpn" else "Подписка"
+    label = f"{prod_label} ({period})"
+    
+    title = "VPN — ДЛЯ БОТОВ" if product == "vpn" else "AiStars — Бот для Brawl Stars"
+    description = f"{title} — {label} ({int(amount)} ⭐)" if currency == "stars" else f"{title} — {label}"
 
     if currency == "stars":
         await bot.send_invoice(
             chat_id=user_id,
-            title="AiStars — Бот для Brawl Stars",
-            description=f"AiStars — {label} ({int(amount)} ⭐)",
+            title=title,
+            description=description[:120],
             payload=json.dumps({
                 "user_id": user_id,
                 "period": period,
+                "product": product,
                 "currency": "XTR",
                 "amount": amount,
             }),
@@ -125,15 +131,20 @@ async def process_purchase(message: types.Message, currency: str, period: str):
                     amount=amount,
                     currency_type="fiat",
                     fiat="USD",
-                    description=f"AiStars — {label}",
-                    payload=json.dumps({"user_id": user_id, "period": period, "amount": amount}),
+                    description=description,
+                    payload=json.dumps({
+                        "user_id": user_id, 
+                        "period": period, 
+                        "product": product, 
+                        "amount": amount
+                    }),
                 )
                 invoice_id = invoice["invoice_id"]
                 pay_url = invoice.get("bot_invoice_url") or invoice.get("mini_app_invoice_url") or invoice.get("pay_url")
 
                 text = (
                     f"💎 <b>Оплата через CryptoBot</b>\n\n"
-                    f"📦 Товар: AiStars — {label}\n"
+                    f"📦 Товар: {title} — {label}\n"
                     f"💰 Сумма: <b>${amount}</b>\n\n"
                     f"Нажмите кнопку ниже для оплаты через @CryptoBot.\n"
                     f"После оплаты нажмите кнопку «Проверить оплату»."
@@ -142,7 +153,7 @@ async def process_purchase(message: types.Message, currency: str, period: str):
                 keyboard = InlineKeyboardMarkup(
                     inline_keyboard=[
                         [InlineKeyboardButton(text=f"💳 Оплатить ${amount} в CryptoBot", url=pay_url)],
-                        [InlineKeyboardButton(text="🔄 Проверить оплату", callback_data=f"check_crypto_{invoice_id}_{period}")],
+                        [InlineKeyboardButton(text="🔄 Проверить оплату", callback_data=f"check_crypto_{invoice_id}_{product}_{period}")],
                         [InlineKeyboardButton(text="◀️ Назад", callback_data="back_start")],
                     ]
                 )
@@ -158,7 +169,7 @@ async def process_purchase(message: types.Message, currency: str, period: str):
         user_tag = f"@{html.escape(message.from_user.username)}" if message.from_user.username else f"ID: {user_id}"
 
         text = (
-            f"📦 Товар: AiStars — {label}\n"
+            f"📦 Товар: {title} — {label}\n"
             f"💰 Сумма: <b>{amount} ₽</b>\n\n"
             f"💳 <b>Номер карты:</b> <code>{card_number}</code>\n\n"
             f"⚠️ <b>ВАЖНО:</b> В комментарии к переводу укажите ваш юзернейм в Telegram:\n"
@@ -167,7 +178,7 @@ async def process_purchase(message: types.Message, currency: str, period: str):
 
         keyboard = InlineKeyboardMarkup(
             inline_keyboard=[
-                [InlineKeyboardButton(text="✅ Я ОПЛАТИЛ", callback_data=f"paid_rub_{period}")],
+                [InlineKeyboardButton(text="✅ Я ОПЛАТИЛ", callback_data=f"paid_rub_{product}_{period}")],
                 [InlineKeyboardButton(text="◀️ Назад", callback_data="back_start")],
             ]
         )
@@ -179,8 +190,6 @@ async def process_purchase(message: types.Message, currency: str, period: str):
 async def paid_rub_callback(callback: types.CallbackQuery):
     import time
     user_id = callback.from_user.id
-
-    # Проверка кулдауна (5 минут)
     now = time.time()
     last_order = _cooldown_orders.get(user_id, 0)
     if now - last_order < COOLDOWN_SECONDS:
@@ -193,19 +202,22 @@ async def paid_rub_callback(callback: types.CallbackQuery):
         )
         return
 
-    # Извлекаем period из callback_data: paid_rub_month или paid_rub_forever
-    period = callback.data.replace("paid_rub_", "")
-    amount = await get_price("rub", period)
+    parts = callback.data.split("_")
+    product = "aistars"
+    if len(parts) >= 4:
+        product = parts[2]
+        period = parts[3]
+    else:
+        period = parts[2]
+
+    amount = await get_price(currency="rub", period=period, product=product)
 
     if not amount:
         await callback.answer("❌ Ошибка: неверный тариф.", show_alert=True)
         return
 
-    # Создаём заказ (он отображается в кнопке «Заказы» в админ-панели)
-    await create_pending_payment(user_id, "RUB", amount, period)
+    await create_pending_payment(user_id, "RUB", amount, period, product)
     _cooldown_orders[user_id] = now
-
-    # Клиенту показываем сообщение о том, что перевод не найден, без уведомления админов в ЛС
     await callback.answer("❌ Перевод не найден", show_alert=True)
 
 
@@ -222,34 +234,54 @@ async def cmd_start(message: types.Message, command: CommandObject = None, state
         message.from_user.first_name,
     )
 
-    # Проверка deep link от WebApp (/start buy_stars_month)
     args = command.args if command else None
     if args and args.startswith("buy_"):
         parts = args.split("_")
-        if len(parts) >= 3:
+        product = "aistars"
+        if len(parts) >= 4:
+            product = parts[1]
+            currency = parts[2]
+            period = parts[3]
+        elif len(parts) == 3:
             currency = parts[1]
             period = parts[2]
-            await process_purchase(message, currency, period)
+        else:
+            await message.answer("❌ Неверные аргументы платежа.")
             return
 
-    sub = await check_subscription(message.from_user.id)
+        await process_purchase(message, currency, period, product)
+        return
 
-    first_name_esc = html.escape(message.from_user.first_name or "Пользователь")
-    if sub["active"]:
-        status_text = "✅ У вас активная подписка!"
-        if sub["type"] == "forever":
-            status_text += "\n🔥 Тип: <b>Навсегда</b>"
+    sub_aistars = await check_subscription(message.from_user.id, "aistars")
+    sub_vpn = await check_subscription(message.from_user.id, "vpn")
+
+    status_parts = []
+    if sub_aistars["active"]:
+        if sub_aistars["type"] == "forever":
+            status_parts.append("AiStars: ✅ <b>Навсегда</b>")
         else:
-            expires = datetime.fromisoformat(sub["expires_at"])
-            status_text += f"\n📅 Действует до: <b>{expires.strftime('%d.%m.%Y')}</b>"
+            expires = datetime.fromisoformat(sub_aistars["expires_at"])
+            status_parts.append(f"AiStars: ✅ до <b>{expires.strftime('%d.%m.%Y')}</b>")
     else:
-        status_text = "❌ У вас нет активной подписки"
+        status_parts.append("AiStars: ❌ Нет подписки")
+
+    if sub_vpn["active"]:
+        if sub_vpn["type"] == "forever":
+            status_parts.append("VPN: ✅ <b>Навсегда</b>")
+        else:
+            expires = datetime.fromisoformat(sub_vpn["expires_at"])
+            status_parts.append(f"VPN: ✅ до <b>{expires.strftime('%d.%m.%Y')}</b>")
+    else:
+        status_parts.append("VPN: ❌ Нет VPN")
+
+    status_text = "\n".join(status_parts)
+    first_name_esc = html.escape(message.from_user.first_name)
 
     welcome_text = (
         f"🤖 <b>Привет, {first_name_esc}!</b>\n\n"
         f"Добро пожаловать в бота для покупки подписки <b>AiStars</b>!\n\n"
-        f"📊 <b>Статус подписки:</b> {status_text}\n\n"
-        f"👇 Нажми кнопку ниже, чтобы купить подписку!"
+        f"📊 <b>Статус услуг:</b>\n{status_text}\n\n"
+        f"👇 Нажми кнопку ниже, чтобы войти в магазин!"
     )
 
     buttons = [
@@ -258,7 +290,6 @@ async def cmd_start(message: types.Message, command: CommandObject = None, state
         [InlineKeyboardButton(text="💬 Поддержка", callback_data="support")],
     ]
 
-    # Показываем кнопку админ-панели ТОЛЬКО администраторам
     if message.from_user.id in ADMIN_IDS:
         buttons.append([InlineKeyboardButton(text="👑 Админ-панель", callback_data="admin_panel")])
 
@@ -269,9 +300,6 @@ async def cmd_start(message: types.Message, command: CommandObject = None, state
         reply_markup=keyboard,
         parse_mode=ParseMode.HTML,
     )
-
-
-
 
 
 @dp.callback_query(F.data == "back_start")
@@ -290,7 +318,8 @@ async def check_crypto_callback(callback: types.CallbackQuery):
     """Проверка статуса оплаты инвойса CryptoBot."""
     parts = callback.data.split("_")
     invoice_id = parts[2]
-    period = parts[3]
+    product = parts[3]
+    period = parts[4]
 
     if not crypto_pay:
         await callback.answer("❌ Оплата через CryptoBot временно недоступна.", show_alert=True)
@@ -303,12 +332,13 @@ async def check_crypto_callback(callback: types.CallbackQuery):
             status = inv.get("status")
             if status == "paid":
                 amount = float(inv.get("amount", 0))
-                await add_subscription(callback.from_user.id, period, "USD", amount)
+                await add_subscription(callback.from_user.id, period, "USD", amount, product)
                 
-                period_text = "навсегда 🔥" if period == "forever" else "на 1 месяц 📅"
+                prod_title = "VPN" if product == "vpn" else "подписка AiStars"
+                period_text = "навсегда 🔥" if period == "forever" else ("на 3 месяца 📅" if period == "3month" else "на 1 месяц 📅")
                 await callback.message.edit_text(
                     f"🎉 <b>Оплата прошла успешно!</b>\n\n"
-                    f"✅ Подписка активирована <b>{period_text}</b>\n"
+                    f"✅ {prod_title.capitalize()} активирована <b>{period_text}</b>\n"
                     f"💫 Спасибо за покупку через CryptoBot!",
                     parse_mode=ParseMode.HTML
                 )
@@ -330,25 +360,35 @@ async def check_crypto_callback(callback: types.CallbackQuery):
 # ===== ПРОВЕРКА СТАТУСА =====
 @dp.callback_query(F.data == "check_status")
 async def check_status_callback(callback: types.CallbackQuery):
-    sub = await check_subscription(callback.from_user.id)
+    sub_aistars = await check_subscription(callback.from_user.id, "aistars")
+    sub_vpn = await check_subscription(callback.from_user.id, "vpn")
 
-    if sub["active"]:
-        if sub["type"] == "forever":
-            text = "✅ <b>Подписка активна!</b>\n🔥 Тип: <b>Навсегда</b>\n\nВам доступны все функции нейросети."
+    status_parts = []
+    if sub_aistars["active"]:
+        if sub_aistars["type"] == "forever":
+            status_parts.append("🤖 <b>AiStars:</b> Активна (Навсегда 🔥)")
         else:
-            expires = datetime.fromisoformat(sub["expires_at"])
+            expires = datetime.fromisoformat(sub_aistars["expires_at"])
             days_left = (expires - datetime.now()).days
-            text = (
-                f"✅ <b>Подписка активна!</b>\n"
-                f"📅 Тип: <b>На месяц</b>\n"
-                f"⏳ Осталось: <b>{days_left} дней</b>\n"
-                f"📆 Действует до: <b>{expires.strftime('%d.%m.%Y')}</b>"
-            )
+            status_parts.append(f"🤖 <b>AiStars:</b> Активна (ещё {days_left} дн., до {expires.strftime('%d.%m.%Y')} 📅)")
     else:
-        text = (
-            "❌ <b>Подписка не активна</b>\n\n"
-            "Нажмите кнопку ниже, чтобы приобрести доступ!"
-        )
+        status_parts.append("🤖 <b>AiStars:</b> Не активна")
+
+    if sub_vpn["active"]:
+        if sub_vpn["type"] == "forever":
+            status_parts.append("🛡️ <b>VPN:</b> Активен (Навсегда 🔥)")
+        else:
+            expires = datetime.fromisoformat(sub_vpn["expires_at"])
+            days_left = (expires - datetime.now()).days
+            status_parts.append(f"🛡️ <b>VPN:</b> Активен (ещё {days_left} дн., до {expires.strftime('%d.%m.%Y')} 📅)")
+    else:
+        status_parts.append("🛡️ <b>VPN:</b> Не активен")
+
+    text = (
+        "📊 <b>Статус ваших услуг:</b>\n\n" +
+        "\n".join(status_parts) +
+        "\n\nНажмите кнопку ниже, чтобы приобрести или продлить доступ!"
+    )
 
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
@@ -383,7 +423,6 @@ async def handle_user_support_message(message: types.Message, state: FSMContext)
     import time
     user_id = message.from_user.id
 
-    # Проверка кулдауна (5 минут)
     now = time.time()
     last_ticket = _cooldown_support.get(user_id, 0)
     if now - last_ticket < COOLDOWN_SECONDS:
@@ -481,9 +520,10 @@ async def admin_orders_callback(callback: types.CallbackQuery):
     for p in payments[:10]:
         raw_uname = p.get('username')
         uname_str = f"@{html.escape(raw_uname)}" if raw_uname else "N/A"
+        prod_title = f" ({p.get('product', 'aistars')})" if p.get('product') else ""
         text += (
             f"<b>Заказ #{p['id']}</b> | {uname_str} (ID: <code>{p['user_id']}</code>)\n"
-            f"💰 Сумма: {p['amount']} {p['currency']} | Тариф: {p['period']}\n\n"
+            f"💰 Сумма: {p['amount']} {p['currency']} | Тариф: {p['period']}{prod_title}\n\n"
         )
         buttons.append([
             InlineKeyboardButton(text=f"✅ Подтвердить #{p['id']}", callback_data=f"adm_confirm_{p['id']}"),
@@ -508,12 +548,13 @@ async def adm_confirm_order(callback: types.CallbackQuery):
 
     if payment:
         user_id = payment["user_id"]
-        period_text = "навсегда 🔥" if payment["period"] == "forever" else "на 1 месяц 📅"
+        prod_title = "VPN" if payment.get("product") == "vpn" else "подписка AiStars"
+        period_text = "навсегда 🔥" if payment["period"] == "forever" else ("на 3 месяца 📅" if payment["period"] == "3month" else "на 1 месяц 📅")
         try:
             await bot.send_message(
                 user_id,
                 f"🎉 <b>Оплата подтверждена!</b>\n\n"
-                f"✅ Подписка активирована <b>{period_text}</b>\n"
+                f"✅ {prod_title.capitalize()} активирована <b>{period_text}</b>\n"
                 f"💫 Спасибо за покупку!",
                 parse_mode=ParseMode.HTML,
             )
@@ -592,7 +633,6 @@ async def admin_tickets_callback(callback: types.CallbackQuery):
         await callback.answer("⛔ Нет доступа.", show_alert=True)
         return
 
-    # Сразу отвечаем на callback, чтобы убрать спиннер Telegram
     await callback.answer()
 
     try:
