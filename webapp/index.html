@@ -374,6 +374,98 @@
             align-items: center;
         }
 
+        /* ===== PRODUCT TABS ===== */
+        .product-tabs-section {
+            margin-bottom: 22px;
+            animation: fadeInUp 0.5s ease-out 0.15s both;
+        }
+
+        .product-tabs {
+            display: flex;
+            gap: 4px;
+            padding: 4px;
+            background: var(--bg-card);
+            border-radius: var(--radius-xl);
+            border: 1px solid var(--glass-border);
+            backdrop-filter: blur(16px);
+        }
+
+        .product-tab {
+            flex: 1;
+            padding: 13px 8px;
+            border: none;
+            border-radius: var(--radius-lg);
+            background: transparent;
+            color: rgba(134, 239, 172, 0.5);
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            position: relative;
+            z-index: 1;
+            letter-spacing: 0.3px;
+        }
+
+        .product-tab:hover {
+            color: var(--text-primary);
+            background: rgba(34, 197, 94, 0.08);
+        }
+
+        .product-tab--active {
+            background: linear-gradient(135deg, #22c55e, #10b981) !important;
+            color: #fff !important;
+            box-shadow: 0 4px 18px rgba(34, 197, 94, 0.3);
+        }
+
+        .product-tab__icon {
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+        }
+
+        /* ===== 3-MONTH CARD VARIANT ===== */
+        .price-card--3month {
+            background: linear-gradient(160deg, rgba(16, 185, 129, 0.12), rgba(34, 197, 94, 0.06));
+        }
+
+        .price-card--3month:hover {
+            box-shadow: 0 10px 45px rgba(16, 185, 129, 0.12);
+        }
+
+        .price-card--3month .price-card__icon-wrap {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.18), rgba(34, 197, 94, 0.12));
+            color: var(--neon-emerald);
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.12);
+        }
+
+        .price-card--3month .price-card__amount {
+            background: linear-gradient(135deg, #10b981, #22c55e);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .price-card--3month .price-card__feature-icon {
+            background: rgba(16, 185, 129, 0.12);
+            color: var(--neon-emerald);
+        }
+
+        .buy-btn--3month {
+            background: linear-gradient(135deg, #10b981, #22c55e);
+            color: #fff;
+            box-shadow: 0 4px 22px rgba(16, 185, 129, 0.3);
+        }
+
+        .buy-btn--3month:hover {
+            box-shadow: 0 6px 35px rgba(16, 185, 129, 0.45);
+            transform: translateY(-2px);
+        }
+
         /* ===== PRICING CARDS ===== */
         .pricing {
             display: flex;
@@ -979,6 +1071,24 @@
 
         </section>
 
+        <!-- Product Type Tabs -->
+        <section class="product-tabs-section">
+            <div class="product-tabs" id="productTabs">
+                <button class="product-tab product-tab--active" data-product="aistars" id="tabAistars">
+                    <span class="product-tab__icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                    </span>
+                    AiStars
+                </button>
+                <button class="product-tab" data-product="vpn" id="tabVpn">
+                    <span class="product-tab__icon">
+                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                    </span>
+                    VPN
+                </button>
+            </div>
+        </section>
+
         <!-- Currency Selector -->
         <section class="currency-section">
             <h2 class="section-title">
@@ -1011,154 +1121,8 @@
             </div>
         </section>
 
-        <!-- Pricing Cards -->
+        <!-- Pricing Cards (dynamically rendered) -->
         <section class="pricing" id="pricingCards">
-            <!-- Month Card -->
-            <div class="price-card price-card--month" id="cardMonth">
-                <div class="price-card__header">
-                    <div class="price-card__icon-wrap">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
-                            <line x1="16" y1="2" x2="16" y2="6"/>
-                            <line x1="8" y1="2" x2="8" y2="6"/>
-                            <line x1="3" y1="10" x2="21" y2="10"/>
-                        </svg>
-                    </div>
-                    <div>
-                        <div class="price-card__title">На месяц</div>
-                        <div class="price-card__desc">Попробуй возможности</div>
-                    </div>
-                </div>
-                <div class="price-card__price-row">
-                    <span class="price-card__amount" id="priceMonth">200</span>
-                    <span class="price-card__currency" id="currencyMonth">⭐</span>
-                    <span class="price-card__period">/ мес</span>
-                </div>
-                <div class="price-card__features">
-                    <div class="price-card__feature">
-                        <span class="price-card__feature-icon">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/><circle cx="12" cy="12" r="10" stroke-width="2"/></svg>
-                        </span>
-                        <span>Фарм кубков</span>
-                    </div>
-                    <div class="price-card__feature">
-                        <span class="price-card__feature-icon">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                        </span>
-                        <span>Автопуш всех персонажей на 1-2-3 прайм</span>
-                    </div>
-                    <div class="price-card__feature">
-                        <span class="price-card__feature-icon">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15l-2 5 9-11h-5l2-5-9 11h5z"/></svg>
-                        </span>
-                        <span>Фарм ранга в ранговом режиме</span>
-                    </div>
-                    <div class="price-card__feature">
-                        <span class="price-card__feature-icon">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                        </span>
-                        <span>Работа 24/7</span>
-                    </div>
-                    <div class="price-card__feature">
-                        <span class="price-card__feature-icon">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>
-                        </span>
-                        <span>Авто Уклонение + Аимбот (точность 80%)</span>
-                    </div>
-                    <div class="price-card__feature">
-                        <span class="price-card__feature-icon">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6"/><polyline points="12 3 12 15"/><polyline points="8 7 12 3 16 7"/></svg>
-                        </span>
-                        <span>Открытие стар дропов, награды с пасса и пути славы</span>
-                    </div>
-                    <div class="price-card__feature">
-                        <span class="price-card__feature-icon">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01"/><path d="M17 12h.01"/><path d="M7 12h.01"/></svg>
-                        </span>
-                        <span>Все режимы (кроме ивентов)</span>
-                    </div>
-                    <div class="price-card__feature">
-                        <span class="price-card__feature-icon">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                        </span>
-                        <span>Несколько окон эмулятора одновременно</span>
-                    </div>
-                    <div class="price-card__feature">
-                        <span class="price-card__feature-icon">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-                        </span>
-                        <span>Смена тимейтов после каждой игры</span>
-                    </div>
-                </div>
-                <button class="buy-btn buy-btn--month" id="buyMonth" onclick="handleBuy('month')">
-                    <span class="buy-btn__icon">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                    </span>
-                    Купить на месяц
-                </button>
-            </div>
-
-            <!-- Forever Card -->
-            <div class="price-card price-card--forever" id="cardForever">
-                <div class="price-card__popular">
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                    ВЫГОДНО
-                </div>
-                <div class="price-card__header">
-                    <div class="price-card__icon-wrap">
-                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M18.178 8c5.096 0 5.096 8 0 8-5.095 0-7.133-8-12.739-8-4.585 0-4.585 8 0 8 5.606 0 7.644-8 12.74-8z"/>
-                        </svg>
-                    </div>
-                    <div>
-                        <div class="price-card__title">Навсегда</div>
-                        <div class="price-card__desc">Лучшая инвестиция</div>
-                    </div>
-                </div>
-                <div class="price-card__price-row">
-                    <span class="price-card__amount" id="priceForever">650</span>
-                    <span class="price-card__currency" id="currencyForever">⭐</span>
-                    <span class="price-card__period">единоразово</span>
-                </div>
-                <div class="price-card__features">
-                    <div class="price-card__feature">
-                        <span class="price-card__feature-icon">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                        </span>
-                        <span>Всё из подписки «На месяц»</span>
-                    </div>
-                    <div class="price-card__feature">
-                        <span class="price-card__feature-icon">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                        </span>
-                        <span>Приоритетная поддержка 24/7</span>
-                    </div>
-                    <div class="price-card__feature">
-                        <span class="price-card__feature-icon">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-                        </span>
-                        <span>Гайд по окупу процесса</span>
-                    </div>
-                    <div class="price-card__feature">
-                        <span class="price-card__feature-icon">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-                        </span>
-                        <span>Кфг владельца</span>
-                    </div>
-                    <div class="price-card__feature">
-                        <span class="price-card__feature-icon">
-                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>
-                        </span>
-                        <span>Ранний доступ к новым функциям</span>
-                    </div>
-                </div>
-                <button class="buy-btn buy-btn--forever" id="buyForever" onclick="handleBuy('forever')">
-                    <span class="buy-btn__icon">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/></svg>
-                    </span>
-                    Купить навсегда
-                </button>
-            </div>
         </section>
 
         <!-- Guarantee -->
@@ -1209,33 +1173,252 @@
             tg.ready();
             tg.expand();
             tg.enableClosingConfirmation();
-
-            // Set header color
             try {
                 tg.setHeaderColor('#050d08');
                 tg.setBackgroundColor('#050d08');
             } catch (e) {}
         }
 
-        // ===== PRICE DATA =====
-        const prices = {
-            stars: {
-                month: { amount: '200', symbol: '⭐', label: 'звёзд' },
-                forever: { amount: '650', symbol: '⭐', label: 'звёзд' }
+        // ===== ICON LIBRARY =====
+        const ICONS = {
+            calendar: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>',
+            calendar3: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/><text x="12" y="18" text-anchor="middle" fill="currentColor" stroke="none" font-size="7" font-weight="bold">3</text></svg>',
+            infinity: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18.178 8c5.096 0 5.096 8 0 8-5.095 0-7.133-8-12.739-8-4.585 0-4.585 8 0 8 5.606 0 7.644-8 12.74-8z"/></svg>',
+            bolt: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>',
+            check: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>',
+            clock: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>',
+            target: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/></svg>',
+            upload: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 12v6a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-6"/><polyline points="12 3 12 15"/><polyline points="8 7 12 3 16 7"/></svg>',
+            controller: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="6" width="20" height="12" rx="2"/><path d="M12 12h.01"/><path d="M17 12h.01"/><path d="M7 12h.01"/></svg>',
+            monitor: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>',
+            refresh: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>',
+            chat: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
+            book: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>',
+            gear: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+            bell: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.73 21a2 2 0 0 1-3.46 0"/></svg>',
+            pulse: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>',
+            shield: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>',
+            globe: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>',
+            zap: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 15l-2 5 9-11h-5l2-5-9 11h5z"/></svg>',
+            arrowDown: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/><circle cx="12" cy="12" r="10" stroke-width="2"/></svg>',
+            server: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>',
+            star: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>'
+        };
+
+        // ===== PRODUCT DATA =====
+        const productData = {
+            aistars: {
+                subtitle: 'Нейросеть для Brawl Stars',
+                prices: {
+                    stars: { month: { amount: '200', symbol: '⭐' }, forever: { amount: '650', symbol: '⭐' } },
+                    rub:   { month: { amount: '250', symbol: '₽' },  forever: { amount: '800', symbol: '₽' } },
+                    usd:   { month: { amount: '3',   symbol: '$' },  forever: { amount: '10',  symbol: '$' } }
+                },
+                plans: [
+                    {
+                        id: 'month', cardClass: 'price-card--month', btnClass: 'buy-btn--month',
+                        title: 'На месяц', desc: 'Попробуй возможности', period: '/ мес',
+                        icon: 'calendar', btnText: 'Купить на месяц', popular: false,
+                        features: [
+                            { text: 'Фарм кубков', icon: 'arrowDown' },
+                            { text: 'Автопуш всех персонажей на 1-2-3 прайм', icon: 'bolt' },
+                            { text: 'Фарм ранга в ранговом режиме', icon: 'zap' },
+                            { text: 'Работа 24/7', icon: 'clock' },
+                            { text: 'Авто Уклонение + Аимбот (точность 80%)', icon: 'target' },
+                            { text: 'Открытие стар дропов, награды с пасса и пути славы', icon: 'upload' },
+                            { text: 'Все режимы (кроме ивентов)', icon: 'controller' },
+                            { text: 'Несколько окон эмулятора одновременно', icon: 'monitor' },
+                            { text: 'Смена тимейтов после каждой игры', icon: 'refresh' }
+                        ]
+                    },
+                    {
+                        id: 'forever', cardClass: 'price-card--forever', btnClass: 'buy-btn--forever',
+                        title: 'Навсегда', desc: 'Лучшая инвестиция', period: 'единоразово',
+                        icon: 'infinity', btnText: 'Купить навсегда',
+                        popular: true, popularText: 'ВЫГОДНО',
+                        features: [
+                            { text: 'Всё из подписки «На месяц»', icon: 'check' },
+                            { text: 'Приоритетная поддержка 24/7', icon: 'chat' },
+                            { text: 'Гайд по окупу процесса', icon: 'book' },
+                            { text: 'Кфг владельца', icon: 'gear' },
+                            { text: 'Ранний доступ к новым функциям', icon: 'bell' }
+                        ]
+                    }
+                ]
             },
-            rub: {
-                month: { amount: '250', symbol: '₽', label: '₽' },
-                forever: { amount: '800', symbol: '₽', label: '₽' }
-            },
-            usd: {
-                month: { amount: '3', symbol: '$', label: '$' },
-                forever: { amount: '10', symbol: '$', label: '$' }
+            vpn: {
+                subtitle: 'VPN — ДЛЯ БОТОВ',
+                prices: {
+                    stars: { month: { amount: '70',  symbol: '⭐' }, '3month': { amount: '200', symbol: '⭐' }, forever: { amount: '750', symbol: '⭐' } },
+                    rub:   { month: { amount: '100', symbol: '₽' },  '3month': { amount: '250', symbol: '₽' },  forever: { amount: '900', symbol: '₽' } },
+                    usd:   { month: { amount: '1',   symbol: '$' },  '3month': { amount: '3',   symbol: '$' },  forever: { amount: '12',  symbol: '$' } }
+                },
+                plans: [
+                    {
+                        id: 'month', cardClass: 'price-card--month', btnClass: 'buy-btn--month',
+                        title: 'На месяц', desc: 'Попробуй VPN', period: '/ мес',
+                        icon: 'calendar', btnText: 'Купить на месяц', popular: false,
+                        features: [
+                            { text: 'Минимальный пинг в игре', icon: 'pulse' },
+                            { text: 'Минимальная задержка в игре', icon: 'clock' },
+                            { text: 'Быстрый подбор', icon: 'bolt' },
+                            { text: '90% Ботов в играх', icon: 'target' },
+                            { text: 'Поддержка всех платформ', icon: 'monitor' },
+                            { text: 'Возможность менять сервера', icon: 'globe' },
+                            { text: 'Возможность легко апать до 4 прайма', icon: 'star' },
+                            { text: 'Поддержка 24/7', icon: 'chat' }
+                        ]
+                    },
+                    {
+                        id: '3month', cardClass: 'price-card--3month', btnClass: 'buy-btn--3month',
+                        title: 'На 3 месяца', desc: 'Оптимальный выбор', period: '/ 3 мес',
+                        icon: 'calendar3', btnText: 'Купить на 3 месяца', popular: false,
+                        features: [
+                            { text: 'Минимальный пинг в игре', icon: 'pulse' },
+                            { text: 'Минимальная задержка в игре', icon: 'clock' },
+                            { text: 'Быстрый подбор', icon: 'bolt' },
+                            { text: '90% Ботов в играх', icon: 'target' },
+                            { text: 'Поддержка всех платформ', icon: 'monitor' },
+                            { text: 'Возможность менять сервера', icon: 'globe' },
+                            { text: 'Возможность легко апать до 4 прайма', icon: 'star' },
+                            { text: 'Поддержка 24/7', icon: 'chat' }
+                        ]
+                    },
+                    {
+                        id: 'forever', cardClass: 'price-card--forever', btnClass: 'buy-btn--forever',
+                        title: 'Навсегда', desc: 'Лучшая инвестиция', period: 'единоразово',
+                        icon: 'infinity', btnText: 'Купить навсегда',
+                        popular: true, popularText: 'ВЫГОДНО',
+                        features: [
+                            { text: 'Всё из тарифов «На месяц» и «На 3 месяца»', icon: 'check' },
+                            { text: 'Приоритетная поддержка 24/7', icon: 'chat' },
+                            { text: 'Приоритетные сервера', icon: 'server' },
+                            { text: 'Гайд по окупу процесса', icon: 'book' }
+                        ]
+                    }
+                ]
             }
         };
 
+        let currentProduct = 'aistars';
         let currentCurrency = 'stars';
 
-        // ===== CURRENCY SWITCHING WITH SMOOTH TRANSITIONS =====
+        // ===== INTERSECTION OBSERVER =====
+        const animObserver = new IntersectionObserver(
+            (entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.style.animationPlayState = 'running';
+                    }
+                });
+            },
+            { threshold: 0.1 }
+        );
+
+        // ===== RENDER PRICING CARDS =====
+        function renderPricingCards() {
+            const container = document.getElementById('pricingCards');
+            const product = productData[currentProduct];
+            const prices = product.prices[currentCurrency];
+
+            // Update subtitle
+            document.querySelector('.hero__subtitle').textContent = product.subtitle;
+
+            let html = '';
+            product.plans.forEach((plan, index) => {
+                const price = prices[plan.id];
+                html += `
+                <div class="price-card ${plan.cardClass}" style="animation: fadeInUp 0.5s ease-out ${0.1 * index}s both;">
+                    ${plan.popular ? `<div class="price-card__popular">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+                        ${plan.popularText}
+                    </div>` : ''}
+                    <div class="price-card__header">
+                        <div class="price-card__icon-wrap">
+                            ${ICONS[plan.icon]}
+                        </div>
+                        <div>
+                            <div class="price-card__title">${plan.title}</div>
+                            <div class="price-card__desc">${plan.desc}</div>
+                        </div>
+                    </div>
+                    <div class="price-card__price-row">
+                        <span class="price-card__amount">${price.amount}</span>
+                        <span class="price-card__currency">${price.symbol}</span>
+                        <span class="price-card__period">${plan.period}</span>
+                    </div>
+                    <div class="price-card__features">
+                        ${plan.features.map((feat, fi) => `
+                        <div class="price-card__feature" style="animation: featureSlideIn 0.4s ease-out ${0.5 + fi * 0.07}s forwards;">
+                            <span class="price-card__feature-icon">${ICONS[feat.icon]}</span>
+                            <span>${feat.text}</span>
+                        </div>`).join('')}
+                    </div>
+                    <button class="buy-btn ${plan.btnClass}" onclick="handleBuy('${plan.id}')">
+                        <span class="buy-btn__icon">${ICONS.bolt}</span>
+                        ${plan.btnText}
+                    </button>
+                </div>`;
+            });
+
+            container.innerHTML = html;
+            attachCardEffects();
+        }
+
+        // ===== ATTACH INTERACTIVE EFFECTS TO CARDS =====
+        function attachCardEffects() {
+            document.querySelectorAll('.buy-btn').forEach(btn => {
+                btn.addEventListener('click', function(e) {
+                    const ripple = document.createElement('span');
+                    ripple.className = 'ripple';
+                    const rect = this.getBoundingClientRect();
+                    const size = Math.max(rect.width, rect.height);
+                    ripple.style.width = ripple.style.height = size + 'px';
+                    ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+                    ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+                    this.appendChild(ripple);
+                    setTimeout(() => ripple.remove(), 600);
+                });
+            });
+
+            document.querySelectorAll('.price-card').forEach(card => {
+                card.addEventListener('touchstart', () => {
+                    if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
+                }, { passive: true });
+
+                card.addEventListener('mousemove', (e) => {
+                    const rect = card.getBoundingClientRect();
+                    const x = (e.clientX - rect.left) / rect.width - 0.5;
+                    const y = (e.clientY - rect.top) / rect.height - 0.5;
+                    card.style.transform = `translateY(-4px) perspective(1000px) rotateX(${-y * 4}deg) rotateY(${x * 4}deg)`;
+                });
+
+                card.addEventListener('mouseleave', () => {
+                    card.style.transform = '';
+                });
+
+                animObserver.observe(card);
+            });
+        }
+
+        // ===== PRODUCT SWITCHING =====
+        document.querySelectorAll('.product-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                const product = tab.dataset.product;
+                if (product === currentProduct) return;
+
+                currentProduct = product;
+
+                document.querySelectorAll('.product-tab').forEach(t => t.classList.remove('product-tab--active'));
+                tab.classList.add('product-tab--active');
+
+                renderPricingCards();
+
+                if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('light');
+            });
+        });
+
+        // ===== CURRENCY SWITCHING =====
         document.querySelectorAll('.currency-tab').forEach(tab => {
             tab.addEventListener('click', () => {
                 const currency = tab.dataset.currency;
@@ -1243,77 +1426,61 @@
 
                 currentCurrency = currency;
 
-                // Update tab states
-                document.querySelectorAll('.currency-tab').forEach(t => {
-                    t.classList.remove('currency-tab--active');
-                });
+                document.querySelectorAll('.currency-tab').forEach(t => t.classList.remove('currency-tab--active'));
                 tab.classList.add('currency-tab--active');
 
-                // Update prices with animation
-                updatePrices(currency);
+                // Animate price change
+                const amounts = document.querySelectorAll('.price-card__amount');
+                amounts.forEach(el => {
+                    el.style.transition = 'all 0.25s cubic-bezier(0.4, 0, 1, 1)';
+                    el.style.opacity = '0';
+                    el.style.transform = 'translateY(-12px) scale(0.95)';
+                });
 
-                // Haptic feedback
-                if (tg?.HapticFeedback) {
-                    tg.HapticFeedback.selectionChanged();
-                }
+                setTimeout(() => {
+                    const product = productData[currentProduct];
+                    const prices = product.prices[currentCurrency];
+                    const cards = document.querySelectorAll('.price-card');
+
+                    cards.forEach((card, i) => {
+                        const plan = product.plans[i];
+                        const price = prices[plan.id];
+                        card.querySelector('.price-card__amount').textContent = price.amount;
+                        card.querySelector('.price-card__currency').textContent = price.symbol;
+                    });
+
+                    document.querySelectorAll('.price-card__amount').forEach(el => {
+                        el.style.transform = 'translateY(12px) scale(0.95)';
+                        requestAnimationFrame(() => {
+                            el.style.transition = 'all 0.35s cubic-bezier(0, 0, 0.2, 1)';
+                            el.style.opacity = '1';
+                            el.style.transform = 'translateY(0) scale(1)';
+                        });
+                    });
+                }, 250);
+
+                if (tg?.HapticFeedback) tg.HapticFeedback.selectionChanged();
             });
         });
-
-        function updatePrices(currency) {
-            const priceMonth = document.getElementById('priceMonth');
-            const priceForever = document.getElementById('priceForever');
-            const currencyMonth = document.getElementById('currencyMonth');
-            const currencyForever = document.getElementById('currencyForever');
-
-            // Animate out with scale
-            [priceMonth, priceForever].forEach(el => {
-                el.style.transition = 'all 0.25s cubic-bezier(0.4, 0, 1, 1)';
-                el.style.opacity = '0';
-                el.style.transform = 'translateY(-12px) scale(0.95)';
-            });
-
-            setTimeout(() => {
-                const p = prices[currency];
-                priceMonth.textContent = p.month.amount;
-                priceForever.textContent = p.forever.amount;
-                currencyMonth.textContent = p.month.symbol;
-                currencyForever.textContent = p.forever.symbol;
-
-                // Animate in
-                [priceMonth, priceForever].forEach(el => {
-                    el.style.transform = 'translateY(12px) scale(0.95)';
-                    requestAnimationFrame(() => {
-                        el.style.transition = 'all 0.35s cubic-bezier(0, 0, 0.2, 1)';
-                        el.style.opacity = '1';
-                        el.style.transform = 'translateY(0) scale(1)';
-                    });
-                });
-            }, 250);
-        }
 
         // ===== BUY HANDLER =====
         function handleBuy(period) {
             const data = {
                 action: 'buy',
+                product: currentProduct,
                 currency: currentCurrency,
                 period: period
             };
 
-            // Haptic feedback
-            if (tg?.HapticFeedback) {
-                tg.HapticFeedback.impactOccurred('medium');
-            }
+            if (tg?.HapticFeedback) tg.HapticFeedback.impactOccurred('medium');
 
             try {
-                if (tg && tg.initData && tg.sendData) {
-                    tg.sendData(JSON.stringify(data));
-                }
+                if (tg && tg.initData && tg.sendData) tg.sendData(JSON.stringify(data));
             } catch (e) {
                 console.log('sendData error:', e);
             }
 
-            // Deep link method for WebApp opened via Inline / Menu buttons
-            const param = `buy_${currentCurrency}_${period}`;
+            const param = `buy_${currentProduct}_${currentCurrency}_${period}`;
             const deepLink = `https://t.me/AiStars1337_bot?start=${param}`;
 
             if (tg && tg.openTelegramLink) {
@@ -1341,9 +1508,7 @@
         function closeOverlay() {
             const overlay = document.getElementById('successOverlay');
             overlay.classList.remove('overlay--visible');
-            if (tg) {
-                tg.close();
-            }
+            if (tg) tg.close();
         }
 
         // ===== PARTICLES GENERATOR =====
@@ -1379,57 +1544,13 @@
 
         createParticles();
 
-        // ===== RIPPLE EFFECT ON BUTTONS =====
-        document.querySelectorAll('.buy-btn').forEach(btn => {
-            btn.addEventListener('click', function(e) {
-                const ripple = document.createElement('span');
-                ripple.className = 'ripple';
-                const rect = this.getBoundingClientRect();
-                const size = Math.max(rect.width, rect.height);
-                ripple.style.width = ripple.style.height = size + 'px';
-                ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
-                ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
-                this.appendChild(ripple);
-                setTimeout(() => ripple.remove(), 600);
-            });
-        });
-
-        // ===== CARD HOVER EFFECTS =====
-        document.querySelectorAll('.price-card').forEach(card => {
-            card.addEventListener('touchstart', () => {
-                if (tg?.HapticFeedback) {
-                    tg.HapticFeedback.selectionChanged();
-                }
-            }, { passive: true });
-
-            // Tilt effect on mouse move
-            card.addEventListener('mousemove', (e) => {
-                const rect = card.getBoundingClientRect();
-                const x = (e.clientX - rect.left) / rect.width - 0.5;
-                const y = (e.clientY - rect.top) / rect.height - 0.5;
-                card.style.transform = `translateY(-4px) perspective(1000px) rotateX(${-y * 4}deg) rotateY(${x * 4}deg)`;
-            });
-
-            card.addEventListener('mouseleave', () => {
-                card.style.transform = '';
-            });
-        });
-
-        // ===== INTERSECTION OBSERVER FOR ANIMATIONS =====
-        const animObserver = new IntersectionObserver(
-            (entries) => {
-                entries.forEach(entry => {
-                    if (entry.isIntersecting) {
-                        entry.target.style.animationPlayState = 'running';
-                    }
-                });
-            },
-            { threshold: 0.1 }
-        );
-
-        document.querySelectorAll('.price-card, .guarantee, .feature').forEach(el => {
+        // ===== OBSERVE STATIC ELEMENTS =====
+        document.querySelectorAll('.guarantee, .feature').forEach(el => {
             animObserver.observe(el);
         });
+
+        // ===== INITIAL RENDER =====
+        renderPricingCards();
     </script>
 </body>
 </html>
