@@ -3,6 +3,10 @@
 """
 
 import os
+from dotenv import load_dotenv
+
+# Загружаем переменные окружения из файла .env
+load_dotenv()
 
 # ===== ОСНОВНЫЕ НАСТРОЙКИ =====
 BOT_TOKEN = os.getenv("BOT_TOKEN", "8263618011:AAGyH2h7ziuiWmtcV6EE-DS-stwH3L-CfqU")

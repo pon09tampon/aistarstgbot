@@ -308,7 +308,8 @@ async def back_start_callback(callback: types.CallbackQuery, state: FSMContext =
     if state:
         await state.clear()
     await callback.message.delete()
-    await cmd_start(callback.message)
+    user_message = callback.message.model_copy(update={"from_user": callback.from_user})
+    await cmd_start(user_message)
     await callback.answer()
 
 
@@ -499,10 +500,16 @@ async def show_admin_panel(event: types.Message | types.CallbackQuery, state: FS
 
 
 # ----- 1. ЗАКАЗЫ (ПОДТВЕРЖДЕНИЕ / ОТКЛОНЕНИЕ) -----
-@dp.callback_query(F.data == "admin_orders")
+@dp.callback_query(F.data.startswith("admin_orders"))
 async def admin_orders_callback(callback: types.CallbackQuery):
     if callback.from_user.id not in ADMIN_IDS:
         return
+
+    # Разбираем номер страницы
+    parts = callback.data.split("_")
+    page = 1
+    if len(parts) >= 3 and parts[2].isdigit():
+        page = int(parts[2])
 
     payments = await get_pending_payments()
 
@@ -514,10 +521,23 @@ async def admin_orders_callback(callback: types.CallbackQuery):
         await callback.answer()
         return
 
-    text = f"📋 <b>Ожидающие заказы ({len(payments)} шт.):</b>\n\n"
+    items_per_page = 10
+    total_items = len(payments)
+    total_pages = (total_items + items_per_page - 1) // items_per_page
+
+    if page < 1:
+        page = 1
+    elif page > total_pages:
+        page = total_pages
+
+    start_idx = (page - 1) * items_per_page
+    end_idx = start_idx + items_per_page
+    page_payments = payments[start_idx:end_idx]
+
+    text = f"📋 <b>Ожидающие заказы ({total_items} шт., стр. {page}/{total_pages}):</b>\n\n"
     buttons = []
 
-    for p in payments[:10]:
+    for p in page_payments:
         raw_uname = p.get('username')
         uname_str = f"@{html.escape(raw_uname)}" if raw_uname else "N/A"
         prod_title = f" ({p.get('product', 'aistars')})" if p.get('product') else ""
@@ -526,9 +546,19 @@ async def admin_orders_callback(callback: types.CallbackQuery):
             f"💰 Сумма: {p['amount']} {p['currency']} | Тариф: {p['period']}{prod_title}\n\n"
         )
         buttons.append([
-            InlineKeyboardButton(text=f"✅ Подтвердить #{p['id']}", callback_data=f"adm_confirm_{p['id']}"),
-            InlineKeyboardButton(text=f"❌ Отклонить #{p['id']}", callback_data=f"adm_reject_{p['id']}"),
+            InlineKeyboardButton(text=f"✅ Подтвердить #{p['id']}", callback_data=f"adm_confirm_{p['id']}_{page}"),
+            InlineKeyboardButton(text=f"❌ Отклонить #{p['id']}", callback_data=f"adm_reject_{p['id']}_{page}"),
         ])
+
+    # Кнопки навигации по страницам
+    nav_buttons = []
+    if page > 1:
+        nav_buttons.append(InlineKeyboardButton(text="◀️ Пред.", callback_data=f"admin_orders_{page-1}"))
+    if page < total_pages:
+        nav_buttons.append(InlineKeyboardButton(text="След. ▶️", callback_data=f"admin_orders_{page+1}"))
+    
+    if nav_buttons:
+        buttons.append(nav_buttons)
 
     buttons.append([InlineKeyboardButton(text="🗑 Очистить все заказы", callback_data="adm_clear_orders_confirm")])
     buttons.append([InlineKeyboardButton(text="◀️ В админ-панель", callback_data="admin_panel")])
@@ -543,7 +573,11 @@ async def adm_confirm_order(callback: types.CallbackQuery):
     if callback.from_user.id not in ADMIN_IDS:
         return
 
-    payment_id = int(callback.data.replace("adm_confirm_", ""))
+    parts = callback.data.split("_")
+    # callback.data = adm_confirm_{id}_{page}
+    payment_id = int(parts[2])
+    page = int(parts[3]) if len(parts) >= 4 and parts[3].isdigit() else 1
+
     payment = await confirm_payment(payment_id)
 
     if payment:
@@ -565,6 +599,7 @@ async def adm_confirm_order(callback: types.CallbackQuery):
     else:
         await callback.answer("❌ Платёж не найден или уже обработан.", show_alert=True)
 
+    callback.data = f"admin_orders_{page}"
     await admin_orders_callback(callback)
 
 
@@ -573,7 +608,11 @@ async def adm_reject_order(callback: types.CallbackQuery):
     if callback.from_user.id not in ADMIN_IDS:
         return
 
-    payment_id = int(callback.data.replace("adm_reject_", ""))
+    parts = callback.data.split("_")
+    # callback.data = adm_reject_{id}_{page}
+    payment_id = int(parts[2])
+    page = int(parts[3]) if len(parts) >= 4 and parts[3].isdigit() else 1
+
     payment = await reject_payment(payment_id)
 
     if payment:
@@ -592,6 +631,7 @@ async def adm_reject_order(callback: types.CallbackQuery):
     else:
         await callback.answer("❌ Платёж не найден.", show_alert=True)
 
+    callback.data = f"admin_orders_{page}"
     await admin_orders_callback(callback)
 
 
@@ -627,7 +667,7 @@ async def adm_clear_orders_yes(callback: types.CallbackQuery):
 
 
 # ----- 2. ПОДДЕРЖКА В АДМИНКЕ -----
-@dp.callback_query(F.data == "admin_tickets", StateFilter("*"))
+@dp.callback_query(F.data.startswith("admin_tickets"), StateFilter("*"))
 async def admin_tickets_callback(callback: types.CallbackQuery, state: FSMContext = None):
     if callback.from_user.id not in ADMIN_IDS:
         await callback.answer("⛔ Нет доступа.", show_alert=True)
@@ -636,6 +676,12 @@ async def admin_tickets_callback(callback: types.CallbackQuery, state: FSMContex
         await state.clear()
 
     await callback.answer()
+
+    # Разбираем номер страницы
+    parts = callback.data.split("_")
+    page = 1
+    if len(parts) >= 3 and parts[2].isdigit():
+        page = int(parts[2])
 
     try:
         tickets = await get_open_tickets()
@@ -651,10 +697,23 @@ async def admin_tickets_callback(callback: types.CallbackQuery, state: FSMContex
         await callback.message.edit_text("📭 Нет открытых обращений в поддержку.", reply_markup=keyboard)
         return
 
-    text = f"💬 Открытые обращения ({len(tickets)} шт.):\n\n"
+    items_per_page = 5
+    total_items = len(tickets)
+    total_pages = (total_items + items_per_page - 1) // items_per_page
+
+    if page < 1:
+        page = 1
+    elif page > total_pages:
+        page = total_pages
+
+    start_idx = (page - 1) * items_per_page
+    end_idx = start_idx + items_per_page
+    page_tickets = tickets[start_idx:end_idx]
+
+    text = f"💬 Открытые обращения ({total_items} шт., стр. {page}/{total_pages}):\n\n"
     buttons = []
 
-    for t in tickets[:5]:
+    for t in page_tickets:
         uname = t.get('username') or 'N/A'
         display_name = f"@{uname}" if uname != 'N/A' else f"ID: {t['user_id']}"
         msg = str(t.get('message_text', ''))[:100]
@@ -662,7 +721,17 @@ async def admin_tickets_callback(callback: types.CallbackQuery, state: FSMContex
             f"Тикет #{t['id']} от {display_name} (ID: {t['user_id']}):\n"
             f"💬 {msg}\n\n"
         )
-        buttons.append([InlineKeyboardButton(text=f"✉️ Ответить на #{t['id']}", callback_data=f"adm_reply_ticket_{t['id']}")])
+        buttons.append([InlineKeyboardButton(text=f"✉️ Ответить на #{t['id']}", callback_data=f"adm_reply_ticket_{t['id']}_{page}")])
+
+    # Кнопки навигации по страницам
+    nav_buttons = []
+    if page > 1:
+        nav_buttons.append(InlineKeyboardButton(text="◀️ Пред.", callback_data=f"admin_tickets_{page-1}"))
+    if page < total_pages:
+        nav_buttons.append(InlineKeyboardButton(text="След. ▶️", callback_data=f"admin_tickets_{page+1}"))
+
+    if nav_buttons:
+        buttons.append(nav_buttons)
 
     buttons.append([InlineKeyboardButton(text="🗑 Очистить все тикеты", callback_data="adm_clear_tickets_confirm")])
     buttons.append([InlineKeyboardButton(text="◀️ В админ-панель", callback_data="admin_panel")])
@@ -710,12 +779,16 @@ async def adm_start_ticket_reply(callback: types.CallbackQuery, state: FSMContex
     if callback.from_user.id not in ADMIN_IDS:
         return
 
-    ticket_id = int(callback.data.replace("adm_reply_ticket_", ""))
-    await state.update_data(reply_ticket_id=ticket_id)
+    parts = callback.data.split("_")
+    # callback.data = adm_reply_ticket_{ticket_id}_{page}
+    ticket_id = int(parts[3])
+    page = int(parts[4]) if len(parts) >= 5 and parts[4].isdigit() else 1
+
+    await state.update_data(reply_ticket_id=ticket_id, page=page)
     await state.set_state(AdminStates.waiting_for_ticket_reply)
 
     keyboard = InlineKeyboardMarkup(
-        inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data="admin_tickets")]]
+        inline_keyboard=[[InlineKeyboardButton(text="❌ Отмена", callback_data=f"admin_tickets_{page}")]]
     )
     await callback.message.edit_text(
         f"✉️ <b>Введите ваш ответ на тикет #{ticket_id}:</b>",
@@ -732,13 +805,14 @@ async def adm_send_ticket_reply(message: types.Message, state: FSMContext):
 
     data = await state.get_data()
     ticket_id = data.get("reply_ticket_id")
+    page = data.get("page", 1)
     await state.clear()
 
     ticket = await reply_support_ticket(ticket_id, message.text)
 
     keyboard = InlineKeyboardMarkup(
         inline_keyboard=[
-            [InlineKeyboardButton(text="💬 К тикетам", callback_data="admin_tickets")],
+            [InlineKeyboardButton(text="💬 К тикетам", callback_data=f"admin_tickets_{page}")],
             [InlineKeyboardButton(text="◀️ В админ-панель", callback_data="admin_panel")],
         ]
     )
