@@ -9,7 +9,7 @@ import logging
 from datetime import datetime
 
 from aiogram import Bot, Dispatcher, F, types
-from aiogram.filters import Command, CommandStart, CommandObject
+from aiogram.filters import Command, CommandStart, CommandObject, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
@@ -222,7 +222,7 @@ async def paid_rub_callback(callback: types.CallbackQuery):
 
 
 # ===== КОМАНДА /start =====
-@dp.message(CommandStart())
+@dp.message(CommandStart(), StateFilter("*"))
 async def cmd_start(message: types.Message, command: CommandObject = None, state: FSMContext = None):
     """Приветствие и главное меню."""
     if state:
@@ -302,7 +302,7 @@ async def cmd_start(message: types.Message, command: CommandObject = None, state
     )
 
 
-@dp.callback_query(F.data == "back_start")
+@dp.callback_query(F.data == "back_start", StateFilter("*"))
 async def back_start_callback(callback: types.CallbackQuery, state: FSMContext = None):
     """Возврат к стартовому меню."""
     if state:
@@ -453,8 +453,8 @@ async def handle_user_support_message(message: types.Message, state: FSMContext)
 # 👑 АДМИН-ПАНЕЛЬ (ТОЛЬКО ДЛЯ ADMIN_IDS)
 # =====================================================================
 
-@dp.message(Command("admin"))
-@dp.callback_query(F.data == "admin_panel")
+@dp.message(Command("admin"), StateFilter("*"))
+@dp.callback_query(F.data == "admin_panel", StateFilter("*"))
 async def show_admin_panel(event: types.Message | types.CallbackQuery, state: FSMContext = None):
     """Главная страница панели администратора."""
     user_id = event.from_user.id if isinstance(event, types.Message) else event.from_user.id
@@ -627,11 +627,13 @@ async def adm_clear_orders_yes(callback: types.CallbackQuery):
 
 
 # ----- 2. ПОДДЕРЖКА В АДМИНКЕ -----
-@dp.callback_query(F.data == "admin_tickets")
-async def admin_tickets_callback(callback: types.CallbackQuery):
+@dp.callback_query(F.data == "admin_tickets", StateFilter("*"))
+async def admin_tickets_callback(callback: types.CallbackQuery, state: FSMContext = None):
     if callback.from_user.id not in ADMIN_IDS:
         await callback.answer("⛔ Нет доступа.", show_alert=True)
         return
+    if state:
+        await state.clear()
 
     await callback.answer()
 
@@ -860,10 +862,12 @@ async def process_broadcast(message: types.Message, state: FSMContext):
 
 
 # ----- 5. ИЗМЕНЕНИЕ ЦЕН -----
-@dp.callback_query(F.data == "admin_prices")
-async def admin_prices_callback(callback: types.CallbackQuery):
+@dp.callback_query(F.data == "admin_prices", StateFilter("*"))
+async def admin_prices_callback(callback: types.CallbackQuery, state: FSMContext = None):
     if callback.from_user.id not in ADMIN_IDS:
         return
+    if state:
+        await state.clear()
 
     rub_m = await get_price("rub", "month")
     rub_f = await get_price("rub", "forever")
